@@ -1,6 +1,7 @@
 """
 Main CLI module for NoPrint
 """
+import os
 import sys
 import logging
 
@@ -40,6 +41,8 @@ def _log(ctx, msg: str):
 @click.argument("packages", nargs=-1)
 def cli(first_only, as_error, packages):
     """No prints are allowed!"""
+    # Allow to search for packges in current directory (mainly for tests directories - not available in sys.modules)
+    sys.path.append(os.getcwd())
     prints = []
     for package in packages:
         prints = prints + detect_prints(package, first_only)
