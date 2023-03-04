@@ -32,7 +32,12 @@ def _get_subpackages(package: str) -> list:
     candidates = []
     sub_pkgs = []
     if not module.origin or isinit:
-        pkg_path = module.submodule_search_locations[0]
+        pkg_path = module.submodule_search_locations
+        if isinstance(pkg_path, list):
+            pkg_path = pkg_path[0]
+        else:  # pragma: no cover
+            # Patch for _NamespacePath in Python3.7
+            pkg_path = pkg_path._path[0]  # pylint: disable=protected-access
 
         candidates = [
             f"{module.name}.{name}"
