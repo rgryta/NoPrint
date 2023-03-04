@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=67.4.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "noprint"
+version = "0.0.1"
+authors = [
+  { name="Radoslaw Gryta", email="radek.gryta@gmail.com" },
+]
+description = "Do not allow prints in your code"
+readme = "README.md"
+requires-python = ">=3.7"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+  'click >= 8.1.0',
+  'chardet >= 5.0.0'
+]
+
+[project.urls]
+"Homepage" = "https://github.com/rgryta/NoPrint"
+"Bug Tracker" = "https://github.com/rgryta/NoPrint/issues"
+
+[project.scripts]
+noprint = "noprint.cli:cli"

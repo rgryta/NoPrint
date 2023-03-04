@@ -1,0 +1,10 @@
+env-setup/ext4.vhdx
+
+venv
+dist
+src/noprint.egg-info
+
+*.pyc
+
+.pytest_cache
+.coverage

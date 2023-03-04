@@ -1,0 +1,1 @@
+powershell.exe "Start-Process powershell.exe -Verb RunAs -ArgumentList '-NoExit -ExecutionPolicy Bypass -file %~dp0\env-setup\init.ps1'"
