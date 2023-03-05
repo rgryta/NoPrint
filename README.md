@@ -12,6 +12,15 @@
 
 Do not allow prints in your python code anymore. Official repository of NoPrint package. Packages are scanned recursively. On top of that, this NoPrint will tell you if any of your submodules are missing `__init__.py` files (reported always as warnings).
 
+## Requirements
+
+There are only two dependencies. Both are kept to the minimum, so you shouldn't have problems using this package.
+```bash
+noprint
+  - click [required: >=5.0]  # Working get_current_context (unit tests dependency)
+  - chardet [required: >=2.1.1]  # Working decode (UniversalDetector)
+```
+
 ## Installation
 
 Pull straight from this repo to install manually or just use pip: `pip install noprint` will do the trick.
