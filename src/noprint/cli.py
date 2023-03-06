@@ -1,58 +1,68 @@
 """
-Main CLI module for NoPrint
+CLI module for NoPrint
 """
 import os
 import sys
 import logging
+import argparse
 
-import click
-
-from .print_seeker import detect_prints
-
-logging.basicConfig(level=logging.NOTSET)
-
-
-@click.pass_context
-def _log(ctx, msg: str):
-    """Print with error or warning styling"""
-    if ctx.params["as_error"]:
-        click.secho(msg, fg="red")
-    else:
-        click.secho(msg, fg="yellow")
+from noprint.logger import log
+from noprint.sprint import detect_prints
+from noprint.exceptions import ImportException
 
 
-@click.command()
-@click.option(
-    "-f",
-    "--first-only",
-    is_flag=True,
-    show_default=True,
-    default=False,
-    help="Exit on first print found.",
-)
-@click.option(
-    "-e",
-    "--as-error",
-    is_flag=True,
-    show_default=True,
-    default=False,
-    help="Exit with error when print is found (default is Warning).",
-)
-@click.argument("packages", nargs=-1)
-def cli(first_only, as_error, packages):
+def cli():
     """No prints are allowed!"""
+    parser = argparse.ArgumentParser(
+        prog="NoPrint",
+        description="Do not allow prints in your code.",
+        epilog="Thank you for using NoPrint",
+        allow_abbrev=False,
+    )
+    parser.add_argument(
+        "-e",
+        "--error-out",
+        action="store_true",
+        help="exit with error when print is found (by default only warnings are shown)",
+    )
+    parser.add_argument(
+        "-f", "--first-only", action="store_true", help="finish on first print found"
+    )
+    parser.add_argument(
+        "packages",
+        help="which packages/modules to check, syntax: <package>[.<module> ...], e.g. noprint or noprint.cli",
+        nargs="*",
+        type=str,
+    )
+    args = parser.parse_known_intermixed_args()[0]
+
+    error_out = args.error_out
+    first_only = args.first_only
+    packages = args.packages
+
     # Allow to search for packges in current directory (mainly for tests directories - not available in sys.modules)
     sys.path.append(os.getcwd())
+
     prints = []
+    exceptions = False
     for package in packages:
-        prints = prints + detect_prints(package, first_only)
+        try:
+            detected = detect_prints(package, first_only)
+            prints = prints + detected
+        except ImportException as exc:
+            exceptions = True
+            log(exc, logging.CRITICAL)
+
+    if exceptions:
+        sys.exit(2)
 
     if prints:
-        _log("Print statements detected at:")
+        lvl = logging.ERROR if error_out else logging.WARNING
+        log("Print statements detected", lvl)
         for prt in prints:
-            _log(prt)
-        if as_error:
+            log(prt, lvl)
+        if error_out:
             sys.exit(1)
         sys.exit(0)
-    click.secho("Success! No prints detected.", fg="green")
+    log("No print statements found, cheers 🍺", logging.INFO)
     sys.exit(0)

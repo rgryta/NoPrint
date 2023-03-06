@@ -5,13 +5,14 @@ from unittest import mock
 
 import pytest
 
-from noprint.print_seeker import _get_subpackages, _get_prints
+from noprint.sprint import _get_subpackages, _get_prints
+from noprint.exceptions import ImportException
 
 
 @pytest.mark.parametrize("origin", [None, "origin", "__init__.py"])
 @pytest.mark.parametrize("name", [None, "name", "__pycache__"])
-@mock.patch("noprint.print_seeker.os")
-@mock.patch("noprint.print_seeker.find_spec")
+@mock.patch("noprint.sprint.os")
+@mock.patch("noprint.sprint.find_spec")
 def test__get_subpackages(mock_spec, mock_os, origin, name):
     """Testing function for _get_subpackages - mock several different module specs and finish with a proper one"""
     mod_mock = mock.Mock()
@@ -31,10 +32,19 @@ def test__get_subpackages(mock_spec, mock_os, origin, name):
         assert package is not None
 
 
+@mock.patch("noprint.sprint.find_spec")
+def test__get_subpackages__import_exc(mock_spec):
+    """Testing function for _get_subpackages - mock several different module specs and finish with a proper one"""
+    mock_spec.side_effect = [Exception("Dummy exception")]
+    with pytest.raises(ImportException):
+        for _ in _get_subpackages("noprint"):
+            pass
+
+
 @pytest.mark.parametrize("code", ["print('')", "", "i=1"])
 @pytest.mark.parametrize("first", [True, False])
 @mock.patch("builtins.open")
-@mock.patch("noprint.print_seeker._get_subpackages")
+@mock.patch("noprint.sprint._get_subpackages")
 def test__get_prints(mock_subpackages, mock_open, first, code):
     """Testing function for _get_prints - verifying if code contains print statements"""
 
@@ -56,6 +66,6 @@ def test__get_prints(mock_subpackages, mock_open, first, code):
 
     prints = _get_prints("noprint", first)
     if code.startswith("print"):
-        assert "Print at line" in prints[0]
+        assert "Line:" in prints[0]
     else:
         assert len(prints) == 0

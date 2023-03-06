@@ -17,7 +17,6 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-  'click >= 5.0',
   'chardet >= 2.2.1'
 ]
 
