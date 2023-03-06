@@ -28,15 +28,20 @@ Pull straight from this repo to install manually or just use pip: `pip install n
 
 Use as command:
 ```bash
-(venv) root@/NoPrint# noprint --help
-Usage: noprint [OPTIONS] [PACKAGES]...
+(venv) root@/NoPrint# noprint -h
+usage: NoPrint [-h] [-e] [-f] [packages ...]
 
-  No prints are allowed!
+Do not allow prints in your code.
 
-Options:
-  -f, --first-only  Exit on first print found.
-  -e, --as-error    Exit with error when print is found (default is Warning).
-  --help            Show this message and exit.
+positional arguments:
+  packages          which packages/modules to check, syntax: <package>[.<module> ...], e.g. noprint or noprint.cli
+
+options:
+  -h, --help        show this help message and exit
+  -e, --error-out   exit with error when print is found (by default only warnings are shown)
+  -f, --first-only  finish on first print found
+
+Thank you for using NoPrint
 ```
 
 Example in Makefile:
@@ -44,11 +49,12 @@ Example in Makefile:
 (venv) root@/DummyProject# make test
 { \
         . venv/bin/activate && \
-        noprint -e -f tp && \
+        noprint -e tp && \
         echo "Finished!" ; \
 }
-Print statements detected at:
-[tp.submodule] Print at line 14 col 4
+[ERROR]:Print statements detected
+[ERROR]:[tp] Line: 4
+[ERROR]:[tp.submodule] Line: 20
 make: *** [Makefile:4: test] Error 1
 ```
 

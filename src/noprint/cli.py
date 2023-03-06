@@ -13,13 +13,30 @@ from noprint.exceptions import ImportException
 
 def cli():
     """No prints are allowed!"""
-    parser = argparse.ArgumentParser(prog="NoPrint", allow_abbrev=False)
-    parser.add_argument("-e", "--as-error", action="store_true")
-    parser.add_argument("-f", "--first-only", action="store_true")
-    parser.add_argument("packages", nargs="*", type=str)
+    parser = argparse.ArgumentParser(
+        prog="NoPrint",
+        description="Do not allow prints in your code.",
+        epilog="Thank you for using NoPrint",
+        allow_abbrev=False,
+    )
+    parser.add_argument(
+        "-e",
+        "--error-out",
+        action="store_true",
+        help="exit with error when print is found (by default only warnings are shown)",
+    )
+    parser.add_argument(
+        "-f", "--first-only", action="store_true", help="finish on first print found"
+    )
+    parser.add_argument(
+        "packages",
+        help="which packages/modules to check, syntax: <package>[.<module> ...], e.g. noprint or noprint.cli",
+        nargs="*",
+        type=str,
+    )
     args = parser.parse_known_intermixed_args()[0]
 
-    as_error = args.as_error
+    error_out = args.error_out
     first_only = args.first_only
     packages = args.packages
 
@@ -40,10 +57,11 @@ def cli():
         sys.exit(2)
 
     if prints:
-        log("Print statements detected", logging)
+        lvl = logging.ERROR if error_out else logging.WARNING
+        log("Print statements detected", lvl)
         for prt in prints:
-            log(prt, logging.ERROR if as_error else logging.WARNING)
-        if as_error:
+            log(prt, lvl)
+        if error_out:
             sys.exit(1)
         sys.exit(0)
     log("No print statements found, cheers 🍺", logging.INFO)
