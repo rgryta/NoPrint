@@ -3,19 +3,16 @@ Module responsible for finding print statements in python modules
 """
 import os
 import io
+import re
 import sys
 import ast
 import pkgutil
 import logging
 from importlib.util import find_spec
 
-import chardet
-
-from noprint.exceptions import ImportException
+from noprint import ENCODING_CAPTURE
 from noprint.logger import log
-
-
-logging.getLogger("chardet.universaldetector").setLevel(logging.CRITICAL)
+from noprint.exceptions import ImportException
 
 
 def _get_subpackages(package: str) -> list:
@@ -26,8 +23,9 @@ def _get_subpackages(package: str) -> list:
         module = find_spec(package)
     except Exception as exc:
         sys.stdout, sys.stderr = sys.__stdout__, sys.__stderr__
-        # pylint: disable=W0707
-        raise ImportException(f"Module {package} raised {type(exc).__name__} on import")
+        raise ImportException(
+            f"Module {package} raised {type(exc).__name__} on import"
+        ) from exc
     sys.stdout, sys.stderr = sys.__stdout__, sys.__stderr__
 
     # If module is a file or contains __init__ then yield it and set flag
@@ -72,12 +70,18 @@ def _get_prints(package: str, first_only: bool) -> list:
     """Detect print statements from packages found by _get_subpackages"""
     prints = []
     for module in _get_subpackages(package):
-        file = open(module.origin, "rb")  # pylint: disable=consider-using-with
-        data = file.read()
-        file.close()
-        encoding = chardet.detect(data)["encoding"]
-        with open(module.origin, "r", encoding=encoding) as fin:
-            parsed = ast.parse(fin.read())
+        encoding = "utf-8"
+        # First two lines of Python source code have to be ASCII compatible
+        # PEP-8, PEP-263, PEP-3120
+        with open(module.origin, "r", encoding="utf-8") as file:
+            for _ in range(2):  # Check 1st two lines
+                found = re.search(ENCODING_CAPTURE, file.readline())
+                if found:
+                    encoding = found.group(1)
+                    break
+
+        with open(module.origin, "r", encoding=encoding) as file:
+            parsed = ast.parse(file.read())
             for node in ast.walk(parsed):
                 if node.__dict__.get("id") == "print":
                     prints.append(f"[{module.name}] Line: {node.lineno}")

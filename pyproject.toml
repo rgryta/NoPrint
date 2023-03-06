@@ -16,9 +16,7 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
-dependencies = [
-  'chardet >= 2.2.1'
-]
+dependencies = []
 
 [project.urls]
 "Homepage" = "https://github.com/rgryta/NoPrint"

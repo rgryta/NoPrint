@@ -58,9 +58,9 @@ def test__get_prints(mock_subpackages, mock_open, first, code):
             return
 
     mock_subpackages.side_effect = _subpackages
-    mock_open.return_value.read.return_value = "Testing".encode("utf-8")
 
     fin = mock.Mock()
+    fin.return_value.readline.return_value = "# -*- coding: utf-8-sig -*-"
     fin.return_value.read.return_value = code
     mock_open.return_value.__enter__ = fin
 
@@ -69,3 +69,4 @@ def test__get_prints(mock_subpackages, mock_open, first, code):
         assert "Line:" in prints[0]
     else:
         assert len(prints) == 0
+    mock_open.assert_called_with("origin", "r", encoding="utf-8-sig")
