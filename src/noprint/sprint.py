@@ -12,10 +12,10 @@ from importlib.util import find_spec
 import chardet
 
 from noprint.exceptions import ImportException
+from noprint.logger import log
 
 
 logging.getLogger("chardet.universaldetector").setLevel(logging.CRITICAL)
-logger = logging.getLogger("noprint")
 
 
 def _get_subpackages(package: str) -> list:
@@ -59,7 +59,7 @@ def _get_subpackages(package: str) -> list:
     candidates_missing = set(candidates) - set(sub_pkgs)
     if isinit and candidates_missing:
         for candidate in candidates_missing:
-            logger.warning("Module %s has no __init__.py", candidate)
+            log(f"Module {candidate} has no __init__.py", logging.WARNING)
     # Patch missing submodules
     sub_pkgs = list(set(candidates) | set(sub_pkgs))
 
