@@ -9,17 +9,25 @@ import pkgutil
 import logging
 from importlib.util import find_spec
 
-import click
 import chardet
 
-logging.getLogger("chardet.universaldetector").setLevel(logging.INFO)
+from . import ImportException
+
+
+logging.getLogger("chardet.universaldetector").setLevel(logging.CRITICAL)
+logger = logging.getLogger("noprint")
 
 
 def _get_subpackages(package: str) -> list:
     """Grab all packages and subpackages"""
     # Patch out statements from __init__
     sys.stdout = sys.stderr = io.StringIO()
-    module = find_spec(package)
+    try:
+        module = find_spec(package)
+    except Exception as exc:
+        sys.stdout, sys.stderr = sys.__stdout__, sys.__stderr__
+        # pylint: disable=W0707
+        raise ImportException(f"Module {package} raised {type(exc).__name__} on import")
     sys.stdout, sys.stderr = sys.__stdout__, sys.__stderr__
 
     # If module is a file or contains __init__ then yield it and set flag
@@ -51,7 +59,7 @@ def _get_subpackages(package: str) -> list:
     candidates_missing = set(candidates) - set(sub_pkgs)
     if isinit and candidates_missing:
         for candidate in candidates_missing:
-            click.secho(f"[Warning] Module {candidate} has no __init__.py", fg="yellow")
+            logger.warning("Module %s has no __init__.py", candidate)
     # Patch missing submodules
     sub_pkgs = list(set(candidates) | set(sub_pkgs))
 
@@ -72,9 +80,7 @@ def _get_prints(package: str, first_only: bool) -> list:
             parsed = ast.parse(fin.read())
             for node in ast.walk(parsed):
                 if node.__dict__.get("id") == "print":
-                    prints.append(
-                        f"[{module.name}] Print at line {node.lineno} col {node.col_offset}"
-                    )
+                    prints.append(f"[{module.name}] Line: {node.lineno}")
                     if first_only:
                         return prints
     return prints

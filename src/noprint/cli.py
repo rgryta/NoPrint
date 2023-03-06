@@ -4,55 +4,56 @@ Main CLI module for NoPrint
 import os
 import sys
 import logging
+import argparse
 
-import click
-
+from . import ImportException
 from .print_seeker import detect_prints
 
-logging.basicConfig(level=logging.NOTSET)
+logger = logging.getLogger("noprint")
 
 
-@click.pass_context
-def _log(ctx, msg: str):
+def _log(msg: str, as_error: bool):
     """Print with error or warning styling"""
-    if ctx.params["as_error"]:
-        click.secho(msg, fg="red")
+    if as_error:
+        logger.error(msg)
     else:
-        click.secho(msg, fg="yellow")
+        logger.warning(msg)
 
 
-@click.command()
-@click.option(
-    "-f",
-    "--first-only",
-    is_flag=True,
-    show_default=True,
-    default=False,
-    help="Exit on first print found.",
-)
-@click.option(
-    "-e",
-    "--as-error",
-    is_flag=True,
-    show_default=True,
-    default=False,
-    help="Exit with error when print is found (default is Warning).",
-)
-@click.argument("packages", nargs=-1)
-def cli(first_only, as_error, packages):
+def cli():
     """No prints are allowed!"""
+    parser = argparse.ArgumentParser(prog="NoPrint", allow_abbrev=False)
+    parser.add_argument("-e", "--as-error", action="store_true")
+    parser.add_argument("-f", "--first-only", action="store_true")
+    parser.add_argument("packages", nargs="*", type=str)
+    args = parser.parse_known_intermixed_args()[0]
+
+    as_error = args.as_error
+    first_only = args.first_only
+    packages = args.packages
+
     # Allow to search for packges in current directory (mainly for tests directories - not available in sys.modules)
     sys.path.append(os.getcwd())
+
     prints = []
+    exceptions = False
     for package in packages:
-        prints = prints + detect_prints(package, first_only)
+        try:
+            detected = detect_prints(package, first_only)
+            prints = prints + detected
+        except ImportException as exc:
+            exceptions = True
+            logger.critical(exc)
+
+    if exceptions:
+        sys.exit(2)
 
     if prints:
-        _log("Print statements detected at:")
+        _log("Print statements detected", as_error)
         for prt in prints:
-            _log(prt)
+            _log(prt, as_error)
         if as_error:
             sys.exit(1)
         sys.exit(0)
-    click.secho("Success! No prints detected.", fg="green")
+    logger.info("No print statements found, cheers 🍺")
     sys.exit(0)

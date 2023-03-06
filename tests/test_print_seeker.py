@@ -7,6 +7,8 @@ import pytest
 
 from noprint.print_seeker import _get_subpackages, _get_prints
 
+from noprint import ImportException
+
 
 @pytest.mark.parametrize("origin", [None, "origin", "__init__.py"])
 @pytest.mark.parametrize("name", [None, "name", "__pycache__"])
@@ -29,6 +31,15 @@ def test__get_subpackages(mock_spec, mock_os, origin, name):
     mock_spec.side_effect = [mod_mock, mod_mock, mod_mock_e]
     for package in _get_subpackages("noprint"):
         assert package is not None
+
+
+@mock.patch("noprint.print_seeker.find_spec")
+def test__get_subpackages__import_exc(mock_spec):
+    """Testing function for _get_subpackages - mock several different module specs and finish with a proper one"""
+    mock_spec.side_effect = [Exception("Dummy exception")]
+    with pytest.raises(ImportException):
+        for _ in _get_subpackages("noprint"):
+            pass
 
 
 @pytest.mark.parametrize("code", ["print('')", "", "i=1"])
@@ -56,6 +67,6 @@ def test__get_prints(mock_subpackages, mock_open, first, code):
 
     prints = _get_prints("noprint", first)
     if code.startswith("print"):
-        assert "Print at line" in prints[0]
+        assert "Line:" in prints[0]
     else:
         assert len(prints) == 0
