@@ -14,10 +14,9 @@ Do not allow prints in your python code anymore. Official repository of NoPrint 
 
 ## Requirements
 
-There are only two dependencies. Both are kept to the minimum, so you shouldn't have problems using this package.
+You shouldn't have problems using this package.
 ```bash
 noprint
-  - click [required: >=5.0]  # Working get_current_context (unit tests dependency)
   - chardet [required: >=2.1.1]  # Working decode (UniversalDetector)
 ```
 

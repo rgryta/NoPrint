@@ -1,23 +1,16 @@
 """
-Main CLI module for NoPrint
+CLI module for NoPrint
 """
 import os
 import sys
 import logging
 import argparse
 
-from . import ImportException
-from .print_seeker import detect_prints
+from noprint.logger import log
+from noprint.sprint import detect_prints
+from noprint.exceptions import ImportException
 
 logger = logging.getLogger("noprint")
-
-
-def _log(msg: str, as_error: bool):
-    """Print with error or warning styling"""
-    if as_error:
-        logger.error(msg)
-    else:
-        logger.warning(msg)
 
 
 def cli():
@@ -49,9 +42,9 @@ def cli():
         sys.exit(2)
 
     if prints:
-        _log("Print statements detected", as_error)
+        log("Print statements detected", as_error)
         for prt in prints:
-            _log(prt, as_error)
+            log(prt, as_error)
         if as_error:
             sys.exit(1)
         sys.exit(0)

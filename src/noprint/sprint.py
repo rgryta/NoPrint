@@ -11,7 +11,7 @@ from importlib.util import find_spec
 
 import chardet
 
-from . import ImportException
+from noprint.exceptions import ImportException
 
 
 logging.getLogger("chardet.universaldetector").setLevel(logging.CRITICAL)

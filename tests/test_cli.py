@@ -5,26 +5,14 @@ from unittest import mock
 
 import pytest
 
-from noprint import ImportException
-from noprint.cli import _log, cli
-
-
-@pytest.mark.parametrize("err", [True, False])
-@mock.patch("noprint.cli.logger.error")
-@mock.patch("noprint.cli.logger.warning")
-def test__log(mock_warning, mock_error, err):
-    """Function for testing _log method"""
-    _log("testmsg", err)
-    if err:
-        mock_error.assert_called_once()
-    else:
-        mock_warning.assert_called_once()
+from noprint.cli import cli
+from noprint.exceptions import ImportException
 
 
 @pytest.mark.parametrize("detected", [[[], []], [[1], [2]], [[1], ImportException()]])
 @pytest.mark.parametrize("as_error", [0, 1])
 @mock.patch("noprint.cli.detect_prints")
-@mock.patch("noprint.cli._log")
+@mock.patch("noprint.cli.log")
 def test_cli(
     mock_log, mock_detect, as_error, detected
 ):  # pylint: disable=unused-argument
