@@ -14,11 +14,7 @@ Do not allow prints in your python code anymore. Official repository of NoPrint 
 
 ## Requirements
 
-You shouldn't have problems using this package.
-```bash
-noprint
-  - chardet [required: >=2.1.1]  # Working decode (UniversalDetector)
-```
+There's ***NONE***! You can use this package to your heart's content. Unless you'd like to develop for it, for this you'll need Black, Pylint and Pytest along with Pytest-cov.
 
 ## Installation
 
