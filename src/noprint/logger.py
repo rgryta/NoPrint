@@ -4,12 +4,16 @@ Logging setup for NoPrint
 import logging
 
 
-def log(msg: str, as_error: bool):
+def log(msg: str, level: int):
     """Print with error or warning styling"""
-    if as_error:
-        logger.error(msg)
-    else:
+    if level == logging.INFO:
+        logger.info(msg)
+    elif level == logging.WARNING:
         logger.warning(msg)
+    elif level == logging.ERROR:
+        logger.error(msg)
+    elif level == logging.CRITICAL:
+        logger.critical(msg)
 
 
 logger = logging.getLogger("noprint")

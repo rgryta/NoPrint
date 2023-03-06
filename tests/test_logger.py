@@ -1,20 +1,30 @@
 """
 Module with tests for noprint.print_seeker
 """
+import logging
+
 from unittest import mock
 
 import pytest
 
-from noprint.logger import log
+import noprint.logger
 
 
-@pytest.mark.parametrize("err", [True, False])
-@mock.patch("noprint.logger.logger.error")
+@pytest.mark.parametrize(
+    "lvl", [logging.INFO, logging.WARNING, logging.ERROR, logging.CRITICAL]
+)
+@mock.patch("noprint.logger.logger.info")
 @mock.patch("noprint.logger.logger.warning")
-def test_log(mock_warning, mock_error, err):
+@mock.patch("noprint.logger.logger.error")
+@mock.patch("noprint.logger.logger.critical")
+def test_log(mock_c, mock_e, mock_w, mock_i, lvl):
     """Function for testing _log method"""
-    log("testmsg", err)
-    if err:
-        mock_error.assert_called_once()
-    else:
-        mock_warning.assert_called_once()
+    noprint.logger.log("testmsg", lvl)
+    if lvl == logging.CRITICAL:
+        mock_c.assert_called_once()
+    elif lvl == logging.ERROR:
+        mock_e.assert_called_once()
+    elif lvl == logging.WARNING:
+        mock_w.assert_called_once()
+    elif lvl == logging.INFO:
+        mock_i.assert_called_once()

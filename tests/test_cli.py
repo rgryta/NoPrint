@@ -5,7 +5,8 @@ from unittest import mock
 
 import pytest
 
-from noprint.cli import cli
+import noprint.cli
+
 from noprint.exceptions import ImportException
 
 
@@ -24,7 +25,7 @@ def test_cli(
         args.append("-e")
 
     with mock.patch("sys.argv", args), pytest.raises(SystemExit) as syse:
-        cli()
+        noprint.cli.cli()
     assert syse.type == SystemExit
     if any(isinstance(prints, ImportException) for prints in detected):
         assert syse.value.code == 2

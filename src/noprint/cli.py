@@ -10,8 +10,6 @@ from noprint.logger import log
 from noprint.sprint import detect_prints
 from noprint.exceptions import ImportException
 
-logger = logging.getLogger("noprint")
-
 
 def cli():
     """No prints are allowed!"""
@@ -36,17 +34,17 @@ def cli():
             prints = prints + detected
         except ImportException as exc:
             exceptions = True
-            logger.critical(exc)
+            log(exc, logging.CRITICAL)
 
     if exceptions:
         sys.exit(2)
 
     if prints:
-        log("Print statements detected", as_error)
+        log("Print statements detected", logging)
         for prt in prints:
-            log(prt, as_error)
+            log(prt, logging.ERROR if as_error else logging.WARNING)
         if as_error:
             sys.exit(1)
         sys.exit(0)
-    logger.info("No print statements found, cheers 🍺")
+    log("No print statements found, cheers 🍺", logging.INFO)
     sys.exit(0)
