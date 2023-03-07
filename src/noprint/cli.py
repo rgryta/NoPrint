@@ -54,6 +54,9 @@ def cli():
     exitcode = 0
     detected = any(is_print for _, is_print in prints)
 
+    if error_out and detected:
+        exitcode = 1
+
     if exceptions:
         for exc in exceptions:
             logging.log(exc.args[0], logging.CRITICAL)
@@ -66,13 +69,10 @@ def cli():
             elif very_verbose:
                 logging.log(prt[0], logging.INFO)
 
-        if error_out and exitcode == 0:
-            exitcode = 1
-
     if exceptions:
         logging.log("Exiting with critical status", logging.CRITICAL)
     elif detected:
         logging.log("Print statements detected", lvl)
     else:
         logging.log("No print statements found, cheers 🍺", logging.INFO)
-    sys.exit(exitcode)
+    sys.exit(exitcode)  # 0 when success, 1 for error, 2 for critical

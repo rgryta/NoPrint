@@ -17,10 +17,13 @@ from noprint.exceptions import ImportException
 @mock.patch("noprint.sprint.find_spec")
 def test__get_subpackages__correct(mock_spec, mock_os, origin, name):
     """Testing function for _get_subpackages - mock several different module specs and finish with a proper one"""
-    mod_mock = mock.Mock()
-    mod_mock.origin = origin
-    mod_mock.name = name
-    mod_mock.submodule_search_locations = ["loc"]
+    if origin is None and name is None:
+        mod_mock = None
+    else:
+        mod_mock = mock.Mock()
+        mod_mock.origin = origin
+        mod_mock.name = name
+        mod_mock.submodule_search_locations = ["loc"]
 
     mod_mock_e = mock.Mock()
     mod_mock_e.origin = "origin"
@@ -34,7 +37,7 @@ def test__get_subpackages__correct(mock_spec, mock_os, origin, name):
         for specs in [[mod_mock] * 2, [mod_mock] * 2, [mod_mock_e] * 2]
         for spec in specs
     ]
-    for package in _get_subpackages("noprint"):
+    for package in _get_subpackages("noprint", verbose=True):
         assert package is not None
 
 
@@ -54,30 +57,27 @@ def test__get_subpackages__missing_uninstalled_overshadowing(
         spec = mock.Mock()
         mock_spec.side_effect = [spec, spec_system]
 
-        for _ in _get_subpackages("noprint"):
+        for _ in _get_subpackages("noprint", verbose=True):
             pass
         args = mock_logging.log.mock_calls
         assert len(args) == 1
         assert args[0] == mock.call(
-            "Module noprint is overshadowing installed module", 30
+            "Module [noprint] is overshadowing installed module", 30
         )
         return
     if spec:
         mock_spec.side_effect = [spec, None]
 
-        for _ in _get_subpackages("noprint"):
+        for _ in _get_subpackages("noprint", verbose=True):
             pass
         args = mock_logging.log.mock_calls
         assert len(args) == 1
-        assert args[0] == mock.call("Module noprint is not installed", 30)
+        assert args[0] == mock.call("Module [noprint] is not installed", 30)
     else:
         mock_spec.side_effect = [spec, spec_system]
-        with pytest.raises(ImportException) as exc:
-            for _ in _get_subpackages("noprint"):
-                pass
         assert (
-            exc.value.args[0]
-            == "Module noprint is not present in current environment, directory or PYTHONPATH"
+            next(_get_subpackages("noprint")).args[0]
+            == "Module [noprint] is not present in current environment, directory or PYTHONPATH"
         )
 
 
@@ -85,23 +85,32 @@ def test__get_subpackages__missing_uninstalled_overshadowing(
 def test__get_subpackages__import_exc(mock_spec):
     """Testing function for _get_subpackages - mock several different module specs and finish with a proper one"""
     mock_spec.side_effect = [Exception("Dummy exception")]
-    with pytest.raises(ImportException):
-        for _ in _get_subpackages("noprint"):
-            pass
+    assert (
+        next(_get_subpackages("noprint")).args[0]
+        == "Module [noprint] raised Exception on import"
+    )
+    assert (
+        next(_get_subpackages("noprint")).args[0]
+        == "Module [noprint] raised StopIteration on import"
+    )
 
 
 @pytest.mark.parametrize("code", ["print('')", "", "i=1"])
 @pytest.mark.parametrize("first", [True, False])
+@pytest.mark.parametrize("mod", [None, ImportException("X")])
 @mock.patch("builtins.open")
 @mock.patch("noprint.sprint._get_subpackages")
-def test__get_prints(mock_subpackages, mock_open, first, code):
+def test__get_prints(mock_subpackages, mock_open, mod, first, code):
     """Testing function for _get_prints - verifying if code contains print statements"""
 
-    def _subpackages(package):  # pylint: disable=unused-argument
+    def _subpackages(package, _):  # pylint: disable=unused-argument
         i = 0
-        module = mock.Mock()
-        module.origin = "origin"
-        yield module
+        if mod is None:
+            module = mock.Mock()
+            module.origin = "origin"
+            yield module
+        else:
+            yield mod
         i = i + 1
         if i == 10:
             return
@@ -113,9 +122,12 @@ def test__get_prints(mock_subpackages, mock_open, first, code):
     fin.return_value.read.return_value = code
     mock_open.return_value.__enter__ = fin
 
-    prints = _get_prints("noprint", first)
-    if code.startswith("print"):
-        assert "Line:" in prints[0]
+    prints = _get_prints(packages=["noprint"], first_only=first, verbose=True)
+    if mod is None:
+        if code.startswith("print"):
+            assert "Line:" in prints[0][0][0]
+        else:
+            assert any(found for _, found in prints[0]) is False
+        mock_open.assert_called_with("origin", "r", encoding="utf-8-sig")
     else:
-        assert len(prints) == 0
-    mock_open.assert_called_with("origin", "r", encoding="utf-8-sig")
+        assert len(prints[1]) > 0

@@ -26,7 +26,7 @@ def _get_spec(package, in_cwd: bool = True) -> Optional[ModuleSpec]:
         module = find_spec(package)
     except Exception as exc:
         raise ImportException(
-            f"Module {package} raised {type(exc).__name__} on import"
+            f"Module [{package}] raised {type(exc).__name__} on import"
         ) from exc
     finally:
         if in_cwd:
@@ -55,23 +55,23 @@ def _get_subpackages(
         module = _get_spec(package)
     except ImportException as exc:
         yield exc
-        return
+        return  # pragma: no cover
     try:
         system_module = _get_spec(package, in_cwd=False)
-    except ImportException:
+    except ImportException:  # pragma: no cover
         pass
 
     if not module:
         yield ImportException(
-            f"Module {package} is not present in current environment, directory or PYTHONPATH"
+            f"Module [{package}] is not present in current environment, directory or PYTHONPATH"
         )
         return
 
     if module and not system_module and verbose:
-        logging.log(f"Module {package} is not installed", logging.WARNING)
+        logging.log(f"Module [{package}] is not installed", logging.WARNING)
     elif module != system_module and verbose:
         logging.log(
-            f"Module {package} is overshadowing installed module", logging.WARNING
+            f"Module [{package}] is overshadowing installed module", logging.WARNING
         )
 
     # If module is a file or contains __init__ then yield it and set flag
@@ -97,7 +97,7 @@ def _get_subpackages(
     candidates_missing = set(candidates) - set(sub_pkgs)
     if isinit and candidates_missing and verbose:
         for candidate in candidates_missing:
-            logging.log(f"Module {candidate} has no __init__.py", logging.WARNING)
+            logging.log(f"Module [{candidate}] has no __init__.py", logging.WARNING)
     # Patch missing submodules
     sub_pkgs = list(set(candidates) | set(sub_pkgs))
 
@@ -110,7 +110,7 @@ def _packages_iter(packages: tuple, verbose: bool = False):
     """Iterate over all provided subpackages"""
     for package in packages:
         for subpackage in _get_subpackages(package, verbose):
-            yield subpackage
+            yield subpackage  # pragma: no cover
 
 
 def _get_prints(
