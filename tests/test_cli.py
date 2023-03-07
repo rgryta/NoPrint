@@ -13,7 +13,7 @@ from noprint.exceptions import ImportException
 @pytest.mark.parametrize("detected", [[[], []], [[1], [2]], [[1], ImportException()]])
 @pytest.mark.parametrize("as_error", [0, 1])
 @mock.patch("noprint.cli.detect_prints")
-@mock.patch("noprint.cli.log")
+@mock.patch("noprint.cli.logging")
 def test_cli(
     mock_log, mock_detect, as_error, detected
 ):  # pylint: disable=unused-argument

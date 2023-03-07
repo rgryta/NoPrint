@@ -2,4 +2,4 @@
 Initial module for NoPrint containing constants and cli reference
 """
 
-ENCODING_CAPTURE = "^[ \t\f]*#.*?coding[:=][ \t]*([-_.a-zA-Z0-9]+)"
+ENCODING_CAPTURE = r"^[ \t\f]*#.*?coding[:=][ \t]*([-_.a-zA-Z0-9]+)"
