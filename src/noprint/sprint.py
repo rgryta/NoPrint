@@ -7,26 +7,53 @@ import re
 import sys
 import ast
 import pkgutil
-import logging
+from typing import Optional
 from importlib.util import find_spec
+from importlib.machinery import ModuleSpec
+
+import noprint.logger as logging
 
 from noprint import ENCODING_CAPTURE
-from noprint.logger import log
 from noprint.exceptions import ImportException
+
+
+def _get_spec(package, in_cwd: bool = True) -> Optional[ModuleSpec]:
+    sys.stdout = sys.stderr = io.StringIO()
+    spath = []
+    try:
+        # Allow to search for packges in current directory (mainly for tests directories - not available in sys.modules)
+        if in_cwd:
+            spath = sys.path
+            sys.path = [os.getcwd()]
+        module = find_spec(package)
+    except Exception as exc:
+        raise ImportException(
+            f"Module {package} raised {type(exc).__name__} on import"
+        ) from exc
+    finally:
+        if in_cwd:
+            sys.path = spath
+        sys.stdout, sys.stderr = sys.__stdout__, sys.__stderr__
+
+    return module
 
 
 def _get_subpackages(package: str) -> list:
     """Grab all packages and subpackages"""
     # Patch out statements from __init__
-    sys.stdout = sys.stderr = io.StringIO()
-    try:
-        module = find_spec(package)
-    except Exception as exc:
-        sys.stdout, sys.stderr = sys.__stdout__, sys.__stderr__
+    module = _get_spec(package)
+    system_module = _get_spec(package, in_cwd=False)
+
+    if not module:
         raise ImportException(
-            f"Module {package} raised {type(exc).__name__} on import"
-        ) from exc
-    sys.stdout, sys.stderr = sys.__stdout__, sys.__stderr__
+            f"Module {package} is not present in current environment, directory or PYTHONPATH"
+        )
+    if module and not system_module:
+        logging.log(f"Module {package} is not installed", logging.WARNING)
+    elif module != system_module:
+        logging.log(
+            f"Module {package} is overshadowing installed module", logging.WARNING
+        )
 
     # If module is a file or contains __init__ then yield it and set flag
     isinit = False
@@ -57,7 +84,7 @@ def _get_subpackages(package: str) -> list:
     candidates_missing = set(candidates) - set(sub_pkgs)
     if isinit and candidates_missing:
         for candidate in candidates_missing:
-            log(f"Module {candidate} has no __init__.py", logging.WARNING)
+            logging.log(f"Module {candidate} has no __init__.py", logging.WARNING)
     # Patch missing submodules
     sub_pkgs = list(set(candidates) | set(sub_pkgs))
 
@@ -90,6 +117,6 @@ def _get_prints(package: str, first_only: bool) -> list:
     return prints
 
 
-def detect_prints(package: str, first_only: bool = False):
+def detect_prints(package: str, first_only: bool = False) -> list:
     """Public wrapper for _get_prints"""
     return _get_prints(package, first_only)  # pragma: no cover

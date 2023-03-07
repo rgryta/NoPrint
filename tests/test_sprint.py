@@ -5,6 +5,8 @@ from unittest import mock
 
 import pytest
 
+import noprint.logger as logging
+
 from noprint.sprint import _get_subpackages, _get_prints
 from noprint.exceptions import ImportException
 
@@ -13,7 +15,7 @@ from noprint.exceptions import ImportException
 @pytest.mark.parametrize("name", [None, "name", "__pycache__"])
 @mock.patch("noprint.sprint.os")
 @mock.patch("noprint.sprint.find_spec")
-def test__get_subpackages(mock_spec, mock_os, origin, name):
+def test__get_subpackages__correct(mock_spec, mock_os, origin, name):
     """Testing function for _get_subpackages - mock several different module specs and finish with a proper one"""
     mod_mock = mock.Mock()
     mod_mock.origin = origin
@@ -27,9 +29,56 @@ def test__get_subpackages(mock_spec, mock_os, origin, name):
 
     mock_os.listdir.return_value = ["name"]
 
-    mock_spec.side_effect = [mod_mock, mod_mock, mod_mock_e]
+    mock_spec.side_effect = [
+        spec
+        for specs in [[mod_mock] * 2, [mod_mock] * 2, [mod_mock_e] * 2]
+        for spec in specs
+    ]
     for package in _get_subpackages("noprint"):
         assert package is not None
+
+
+@pytest.mark.parametrize("spec", [None, mock.Mock(), True])
+@mock.patch("noprint.sprint.logging")
+@mock.patch("noprint.sprint.find_spec")
+def test__get_subpackages__missing_uninstalled_overshadowing(
+    mock_spec, mock_logging, spec
+):
+    """Testing function for _get_subpackages - mock several different module specs and finish with a proper one"""
+    spec_system = mock.Mock()
+
+    mock_logging.WARNING = logging.WARNING
+    mock_logging.log = mock.MagicMock()
+
+    if isinstance(spec, bool):
+        spec = mock.Mock()
+        mock_spec.side_effect = [spec, spec_system]
+
+        for _ in _get_subpackages("noprint"):
+            pass
+        args = mock_logging.log.mock_calls
+        assert len(args) == 1
+        assert args[0] == mock.call(
+            "Module noprint is overshadowing installed module", 30
+        )
+        return
+    if spec:
+        mock_spec.side_effect = [spec, None]
+
+        for _ in _get_subpackages("noprint"):
+            pass
+        args = mock_logging.log.mock_calls
+        assert len(args) == 1
+        assert args[0] == mock.call("Module noprint is not installed", 30)
+    else:
+        mock_spec.side_effect = [spec, spec_system]
+        with pytest.raises(ImportException) as exc:
+            for _ in _get_subpackages("noprint"):
+                pass
+        assert (
+            exc.value.args[0]
+            == "Module noprint is not present in current environment, directory or PYTHONPATH"
+        )
 
 
 @mock.patch("noprint.sprint.find_spec")
