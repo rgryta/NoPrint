@@ -38,19 +38,25 @@ def _get_spec(package, in_cwd: bool = True) -> Optional[ModuleSpec]:
     return module
 
 
-def _get_subpackages(package: str) -> list:
+def _get_subpackages(package: str, verbose: bool = False) -> list:
     """Grab all packages and subpackages"""
     # Patch out statements from __init__
-    module = _get_spec(package)
-    system_module = _get_spec(package, in_cwd=False)
+    try:
+        module = _get_spec(package)
+        system_module = _get_spec(package, in_cwd=False)
+    except ImportException as exc:
+        yield exc
+        return
 
     if not module:
-        raise ImportException(
+        yield ImportException(
             f"Module {package} is not present in current environment, directory or PYTHONPATH"
         )
-    if module and not system_module:
+        return
+
+    if module and not system_module and verbose:
         logging.log(f"Module {package} is not installed", logging.WARNING)
-    elif module != system_module:
+    elif module != system_module and verbose:
         logging.log(
             f"Module {package} is overshadowing installed module", logging.WARNING
         )
@@ -82,7 +88,7 @@ def _get_subpackages(package: str) -> list:
         ]
     # If submodule is a directory and doesn't contain __init__ raise Warning
     candidates_missing = set(candidates) - set(sub_pkgs)
-    if isinit and candidates_missing:
+    if isinit and candidates_missing and verbose:
         for candidate in candidates_missing:
             logging.log(f"Module {candidate} has no __init__.py", logging.WARNING)
     # Patch missing submodules
@@ -93,30 +99,65 @@ def _get_subpackages(package: str) -> list:
             yield subpkg
 
 
-def _get_prints(package: str, first_only: bool) -> list:
+def _packages_iter(packages: tuple, verbose: bool = False):
+    """Iterate over all provided subpackages"""
+    for package in packages:
+        for subpackage in _get_subpackages(package, verbose):
+            yield subpackage
+
+
+def _get_prints(
+    packages: tuple, first_only: bool = False, verbose: bool = False
+) -> tuple[list, list]:
     """Detect print statements from packages found by _get_subpackages"""
     prints = []
-    for module in _get_subpackages(package):
-        encoding = "utf-8"
-        # First two lines of Python source code have to be ASCII compatible
-        # PEP-8, PEP-263, PEP-3120
-        with open(module.origin, "r", encoding="utf-8") as file:
-            for _ in range(2):  # Check 1st two lines
-                found = re.search(ENCODING_CAPTURE, file.readline())
-                if found:
-                    encoding = found.group(1)
-                    break
+    exceptions = []
+    for module in _packages_iter(packages, verbose):
+        if isinstance(module, ImportException):
+            exceptions = exceptions + [module]
+        else:
+            encoding = "utf-8"
+            # First two lines of Python source code have to be ASCII compatible
+            # PEP-8, PEP-263, PEP-3120
+            with open(module.origin, "r", encoding="utf-8") as file:
+                for _ in range(2):  # Check 1st two lines
+                    found = re.search(ENCODING_CAPTURE, file.readline())
+                    if found:
+                        encoding = found.group(1)
+                        break
 
-        with open(module.origin, "r", encoding=encoding) as file:
-            parsed = ast.parse(file.read())
-            for node in ast.walk(parsed):
-                if node.__dict__.get("id") == "print":
-                    prints.append(f"[{module.name}] Line: {node.lineno}")
-                    if first_only:
-                        return prints
-    return prints
+            with open(module.origin, "r", encoding=encoding) as file:
+                parsed = ast.parse(file.read())
+                clear = True
+                for node in ast.walk(parsed):
+                    if node.__dict__.get("id") == "print":
+                        clear = False
+                        prints.append(
+                            (
+                                f"[{module.name}] Line: {node.lineno}",
+                                True,
+                            )
+                        )
+                        if first_only:
+                            return (
+                                prints,
+                                exceptions,
+                            )
+                if clear:
+                    prints.append(
+                        (
+                            f"[CLEAR]:[{module.name}]",
+                            False,
+                        )
+                    )
+    return (
+        prints,
+        exceptions,
+    )
 
 
-def detect_prints(package: str, first_only: bool = False) -> list:
+def detect_prints(
+    packages: tuple, first_only: bool = False, verbose: bool = False
+) -> tuple[list, list]:
     """Public wrapper for _get_prints"""
-    return _get_prints(package, first_only)  # pragma: no cover
+    return _get_prints(packages, first_only, verbose)  # pragma: no cover

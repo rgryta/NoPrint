@@ -7,7 +7,6 @@ import argparse
 import noprint.logger as logging
 
 from noprint.sprint import detect_prints
-from noprint.exceptions import ImportException
 
 
 def cli():
@@ -28,37 +27,52 @@ def cli():
         "-f", "--first-only", action="store_true", help="finish on first print found"
     )
     parser.add_argument(
+        "-v",
+        "--verbose",
+        action="count",
+        default=0,
+        help="provide more analysis information (use multiple v's to increase logging level)",
+    )
+    parser.add_argument(
         "packages",
         help="which packages/modules to check, syntax: <package>[.<module> ...], e.g. noprint or noprint.cli",
-        nargs="*",
+        nargs="+",
         type=str,
     )
     args = parser.parse_known_intermixed_args()[0]
 
     error_out = args.error_out
     first_only = args.first_only
+    verbose = bool(args.verbose)
+    very_verbose = args.verbose >= 2
     packages = args.packages
 
-    prints = []
-    exceptions = False
-    for package in packages:
-        try:
-            detected = detect_prints(package, first_only)
-            prints = prints + detected
-        except ImportException as exc:
-            exceptions = True
-            logging.log(exc, logging.CRITICAL)
+    lvl = logging.ERROR if error_out else logging.WARNING
+
+    prints, exceptions = detect_prints(packages, first_only, verbose)
+
+    exitcode = 0
+    detected = any(is_print for _, is_print in prints)
 
     if exceptions:
-        sys.exit(2)
+        for exc in exceptions:
+            logging.log(exc.args[0], logging.CRITICAL)
+        exitcode = 2
 
-    if prints:
-        lvl = logging.ERROR if error_out else logging.WARNING
-        logging.log("Print statements detected", lvl)
+    if verbose:
         for prt in prints:
-            logging.log(prt, lvl)
-        if error_out:
-            sys.exit(1)
-        sys.exit(0)
-    logging.log("No print statements found, cheers 🍺", logging.INFO)
-    sys.exit(0)
+            if prt[1]:
+                logging.log(prt[0], lvl)
+            elif very_verbose:
+                logging.log(prt[0], logging.INFO)
+
+        if error_out and exitcode == 0:
+            exitcode = 1
+
+    if exceptions:
+        logging.log("Exiting with critical status", logging.CRITICAL)
+    elif detected:
+        logging.log("Print statements detected", lvl)
+    else:
+        logging.log("No print statements found, cheers 🍺", logging.INFO)
+    sys.exit(exitcode)
