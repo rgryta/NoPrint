@@ -10,11 +10,19 @@
 
 ## About
 
-Do not allow prints in your python code anymore. Official repository of NoPrint package. Packages are scanned recursively. On top of that, this NoPrint will tell you if any of your submodules are missing `__init__.py` files (reported always as warnings).
+Do not allow prints in your python code anymore. Official repository of NoPrint package. Packages are scanned recursively.
+
+Additional features:
+1. Warning when any of your submodules are missing `__init__.py` files (reported always as warnings) - use single `-v` to enable that.
+1. You may also receive a warning if one of packages that's being analysed is out of system's scope - it will still be scanned, but that "package" is not reachable outside of that directory, these are e.g. `tests` directories - enabled with `-v`.
+1. You will receive a warning if one of your packages is overshadowing a package available on system/environment level, e.g. if you have requested to analyse your `test` directory, but Python already has an internal package called `test` - enabled with `-v`.
+1. NoPrint will tell you specifically which of your submodules are clear of print statements - use double `-vv` or `-v -v` (some older Python versions) to enable that, `-vv` also enables features from `-v`.
+1. Critical info - if import of one of your modules results with an exception (or is missing - maybe you mistyped your package?).
+
 
 ## Requirements
 
-There's ***NONE***! You can use this package to your heart's content. Unless you'd like to develop for it, for this you'll need Black, Pylint and Pytest along with Pytest-cov.
+There's ***NONE!*** You can use this package to your heart's content. Unless you'd like to develop for it, for this you'll need Black, Pylint and Pytest along with Pytest-cov.
 
 ## Installation
 
@@ -24,8 +32,7 @@ Pull straight from this repo to install manually or just use pip: `pip install n
 
 Use as command:
 ```bash
-(venv) root@/NoPrint# noprint -h
-usage: NoPrint [-h] [-e] [-f] [packages ...]
+usage: NoPrint [-h] [-e] [-f] [-v] packages [packages ...]
 
 Do not allow prints in your code.
 
@@ -36,6 +43,7 @@ options:
   -h, --help        show this help message and exit
   -e, --error-out   exit with error when print is found (by default only warnings are shown)
   -f, --first-only  finish on first print found
+  -v, --verbose     provide more analysis information (use multiple v's to increase logging level)
 
 Thank you for using NoPrint
 ```
@@ -45,10 +53,13 @@ Example in Makefile:
 (venv) root@/DummyProject# make test
 { \
         . venv/bin/activate && \
-        noprint -e tp && \
+        noprint -evv tp && \
         echo "Finished!" ; \
 }
 [ERROR]:Print statements detected
+[CLEAR]:[tp.exceptions]
+[CLEAR]:[tp.logger]
+[CLEAR]:[tp.cli]
 [ERROR]:[tp] Line: 4
 [ERROR]:[tp.submodule] Line: 20
 make: *** [Makefile:4: test] Error 1
