@@ -7,7 +7,7 @@ import re
 import sys
 import ast
 import pkgutil
-from typing import Optional
+from typing import Optional, Union, Tuple
 from importlib.util import find_spec
 from importlib.machinery import ModuleSpec
 
@@ -19,12 +19,10 @@ from noprint.exceptions import ImportException
 
 def _get_spec(package, in_cwd: bool = True) -> Optional[ModuleSpec]:
     sys.stdout = sys.stderr = io.StringIO()
-    spath = []
     try:
         # Allow to search for packges in current directory (mainly for tests directories - not available in sys.modules)
         if in_cwd:
-            spath = sys.path
-            sys.path = [os.getcwd()]
+            sys.path.insert(0, os.getcwd())
         module = find_spec(package)
     except Exception as exc:
         raise ImportException(
@@ -32,21 +30,36 @@ def _get_spec(package, in_cwd: bool = True) -> Optional[ModuleSpec]:
         ) from exc
     finally:
         if in_cwd:
-            sys.path = spath
+            sys.path.remove(os.getcwd())
         sys.stdout, sys.stderr = sys.__stdout__, sys.__stderr__
 
     return module
 
 
-def _get_subpackages(package: str, verbose: bool = False) -> list:
+def _get_module_path(module: ModuleSpec):
+    pkg_path = module.submodule_search_locations
+    if isinstance(pkg_path, list):
+        pkg_path = pkg_path[0]
+    else:  # pragma: no cover
+        # Patch for _NamespacePath in Python3.7
+        pkg_path = pkg_path._path[0]  # pylint: disable=protected-access
+    return pkg_path
+
+
+def _get_subpackages(
+    package: str, verbose: bool = False
+) -> Union[ModuleSpec, ImportException]:
     """Grab all packages and subpackages"""
     # Patch out statements from __init__
     try:
         module = _get_spec(package)
-        system_module = _get_spec(package, in_cwd=False)
     except ImportException as exc:
         yield exc
         return
+    try:
+        system_module = _get_spec(package, in_cwd=False)
+    except ImportException:
+        pass
 
     if not module:
         yield ImportException(
@@ -71,13 +84,7 @@ def _get_subpackages(package: str, verbose: bool = False) -> list:
     candidates = []
     sub_pkgs = []
     if not module.origin or isinit:
-        pkg_path = module.submodule_search_locations
-        if isinstance(pkg_path, list):
-            pkg_path = pkg_path[0]
-        else:  # pragma: no cover
-            # Patch for _NamespacePath in Python3.7
-            pkg_path = pkg_path._path[0]  # pylint: disable=protected-access
-
+        pkg_path = _get_module_path(module)
         candidates = [
             f"{module.name}.{name}"
             for name in os.listdir(pkg_path)
@@ -108,7 +115,7 @@ def _packages_iter(packages: tuple, verbose: bool = False):
 
 def _get_prints(
     packages: tuple, first_only: bool = False, verbose: bool = False
-) -> tuple[list, list]:
+) -> Tuple[list, list]:
     """Detect print statements from packages found by _get_subpackages"""
     prints = []
     exceptions = []
@@ -158,6 +165,6 @@ def _get_prints(
 
 def detect_prints(
     packages: tuple, first_only: bool = False, verbose: bool = False
-) -> tuple[list, list]:
+) -> Tuple[list, list]:
     """Public wrapper for _get_prints"""
     return _get_prints(packages, first_only, verbose)  # pragma: no cover
