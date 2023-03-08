@@ -168,6 +168,9 @@ def _get_prints(
     func = functools.partial(_parse_pyfile, first_only=first_only)
     with Pool(pool_threads) as pool:
         for found, exception in pool.imap(func, _packages_iter(packages, verbose)):
+            # Python 3.7 returns None when []
+            if found is None:   # pragma: no cover
+                found = []
             if found:
                 prints = prints + found
             elif exception:
