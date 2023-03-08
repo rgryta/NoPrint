@@ -1,11 +1,12 @@
 .PHONY: test
 test:
 	@echo "Starting tests..."
+	# Options for noprint are separately due to older Python 3.7 (automatic testing purposes)
 	{ \
 		if [ -d "venv" ] ; then	\
 			. venv/bin/activate ; \
 		fi && \
-		noprint -e -f -v -v -m 0 noprint tests && \ # Options are separately due to older Python 3.7
+		noprint -e -f -v -v -m 0 noprint tests && \
 		black --check src tests && \
 		pylint -j 0 src tests && \
 		pytest --cov-report term-missing --cov=noprint -s -v tests && \

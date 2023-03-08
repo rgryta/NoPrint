@@ -118,7 +118,7 @@ def _packages_iter(packages: tuple, verbose: bool = False):
 def _parse_pyfile(module, first_only):
     """Method for parsing python source code files to look for prints"""
     if isinstance(module, ImportException):
-        return (None, module)
+        return ([], module)
 
     prints = []
     encoding = "utf-8"
@@ -168,9 +168,6 @@ def _get_prints(
     func = functools.partial(_parse_pyfile, first_only=first_only)
     with Pool(pool_threads) as pool:
         for found, exception in pool.imap(func, _packages_iter(packages, verbose)):
-            # Python 3.7 returns None when []
-            if found is None:   # pragma: no cover
-                found = []
             if found:
                 prints = prints + found
             elif exception:
