@@ -7,9 +7,11 @@ import re
 import sys
 import ast
 import pkgutil
+import functools
 from typing import Optional, Union, Tuple
 from importlib.util import find_spec
 from importlib.machinery import ModuleSpec
+from multiprocessing.pool import Pool
 
 import noprint.logger as logging
 
@@ -113,50 +115,79 @@ def _packages_iter(packages: tuple, verbose: bool = False):
             yield subpackage  # pragma: no cover
 
 
+def apply_first_only(first_only):
+    """Wrapper for function passable to imap, configuring first_only parameter"""
+
+    def wrapper(func):
+        @functools.wraps(func)
+        def wrapped(*args):
+            return func(module=args[0], first_only=first_only)
+
+        return wrapped
+
+    return wrapper
+
+
+def _parse_pyfile(module, first_only):
+    if isinstance(module, ImportException):
+        return (None, module)
+
+    prints = []
+    encoding = "utf-8"
+    # First two lines of Python source code have to be ASCII compatible
+    # PEP-8, PEP-263, PEP-3120
+    with open(module.origin, "r", encoding="utf-8") as file:
+        for _ in range(2):  # Check 1st two lines
+            found = re.search(ENCODING_CAPTURE, file.readline())
+            if found:
+                encoding = found.group(1)
+                break
+
+    with open(module.origin, "r", encoding=encoding) as file:
+        parsed = ast.parse(file.read())
+        clear = True
+        for node in ast.walk(parsed):
+            if node.__dict__.get("id") == "print":
+                clear = False
+                prints.append(
+                    (
+                        f"[{module.name}] Line: {node.lineno}",
+                        True,
+                    )
+                )
+                if first_only:
+                    return (prints, None)
+        if clear:
+            prints.append(
+                (
+                    f"[CLEAR]:[{module.name}]",
+                    False,
+                )
+            )
+    return (prints, None)
+
+
 def _get_prints(
-    packages: tuple, first_only: bool = False, verbose: bool = False
+    packages: tuple,
+    first_only: bool = False,
+    verbose: bool = False,
+    pool_threads: int = 1,
 ) -> Tuple[list, list]:
     """Detect print statements from packages found by _get_subpackages"""
     prints = []
     exceptions = []
-    for module in _packages_iter(packages, verbose):
-        if isinstance(module, ImportException):
-            exceptions = exceptions + [module]
-        else:
-            encoding = "utf-8"
-            # First two lines of Python source code have to be ASCII compatible
-            # PEP-8, PEP-263, PEP-3120
-            with open(module.origin, "r", encoding="utf-8") as file:
-                for _ in range(2):  # Check 1st two lines
-                    found = re.search(ENCODING_CAPTURE, file.readline())
-                    if found:
-                        encoding = found.group(1)
-                        break
-
-            with open(module.origin, "r", encoding=encoding) as file:
-                parsed = ast.parse(file.read())
-                clear = True
-                for node in ast.walk(parsed):
-                    if node.__dict__.get("id") == "print":
-                        clear = False
-                        prints.append(
-                            (
-                                f"[{module.name}] Line: {node.lineno}",
-                                True,
-                            )
-                        )
-                        if first_only:
-                            return (
-                                prints,
-                                exceptions,
-                            )
-                if clear:
-                    prints.append(
-                        (
-                            f"[CLEAR]:[{module.name}]",
-                            False,
-                        )
-                    )
+    global _parse_pyfile  # pylint: disable=global-statement
+    _parse_pyfile = apply_first_only(first_only=first_only)(_parse_pyfile)
+    with Pool(pool_threads) as pool:
+        for found, exceptions in pool.imap(
+            _parse_pyfile, _packages_iter(packages, verbose)
+        ):
+            if found:
+                prints = prints + found
+            elif exceptions:
+                exceptions.append(exceptions)
+            if any(printed for _, printed in found) and first_only:
+                break
     return (
         prints,
         exceptions,
@@ -164,7 +195,10 @@ def _get_prints(
 
 
 def detect_prints(
-    packages: tuple, first_only: bool = False, verbose: bool = False
+    packages: tuple,
+    first_only: bool = False,
+    verbose: bool = False,
+    pool_threads: int = 1,
 ) -> Tuple[list, list]:
     """Public wrapper for _get_prints"""
-    return _get_prints(packages, first_only, verbose)  # pragma: no cover
+    return _get_prints(packages, first_only, verbose, pool_threads)  # pragma: no cover
