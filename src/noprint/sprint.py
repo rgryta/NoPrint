@@ -115,20 +115,8 @@ def _packages_iter(packages: tuple, verbose: bool = False):
             yield subpackage
 
 
-def apply_first_only(first_only):
-    """Wrapper for function passable to imap, configuring first_only parameter"""
-
-    def wrapper(func):
-        @functools.wraps(func)
-        def wrapped(*args):
-            return func(module=args[0], first_only=first_only)  # pragma: no cover
-
-        return wrapped
-
-    return wrapper
-
-
 def _parse_pyfile(module, first_only):
+    """Method for parsing python source code files to look for prints"""
     if isinstance(module, ImportException):
         return (None, module)
 
@@ -176,12 +164,10 @@ def _get_prints(
     """Detect print statements from packages found by _get_subpackages"""
     prints = []
     exceptions = []
-    global _parse_pyfile  # pylint: disable=global-statement
-    _parse_pyfile = apply_first_only(first_only=first_only)(_parse_pyfile)
+
+    func = functools.partial(_parse_pyfile, first_only=first_only)
     with Pool(pool_threads) as pool:
-        for found, exception in pool.imap(
-            _parse_pyfile, _packages_iter(packages, verbose)
-        ):
+        for found, exception in pool.imap(func, _packages_iter(packages, verbose)):
             if found:
                 prints = prints + found
             elif exception:
