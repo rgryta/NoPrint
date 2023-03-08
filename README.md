@@ -61,7 +61,7 @@ Thank you for using NoPrint
 
 ### Multithreading
 
-While other flags are rather selfexplanatory, `-m` works in a slightly different way. If you do not provide that flag, NoPrint will execute in a single thread only. If you set it to 1 (`-m 1` or just provice `-m` with no number - without the number must be at the end of the command) then it will be executed with as many threads as CPUs are reported by host machine. Other than that, you can hardlock that number accordingly to your needs (negative and 0 will be treated like a single thread).
+While other flags are rather selfexplanatory, `-m` works in a slightly different way. If you do not provide that flag, NoPrint will execute in a single thread only. If you set it to 1 (`-m 1` or just provide `-m` with no number - in this case the argument must be at provided after packages, e.g. `noprint -fev noprint -m`) then it will be executed with as many threads as CPUs are reported by host machine. Other than that, you can hardlock that number accordingly to your needs (negative and 0 will be treated like a single thread).
 
 
 ### Example in Makefile:
