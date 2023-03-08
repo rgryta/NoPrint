@@ -61,23 +61,22 @@ Thank you for using NoPrint
 
 ### Multithreading
 
-While other flags are rather selfexplanatory, `-m` works in a slightly different way. If you do not provide that flag, NoPrint will execute in a single thread only. If you set it to 1 (`-m 1` or just provide `-m` with no number - in this case the argument must be at provided after packages, e.g. `noprint -fev noprint -m`) then it will be executed with as many threads as CPUs are reported by host machine. Other than that, you can hardlock that number accordingly to your needs (negative and 0 will be treated like a single thread).
-
+Provide number of threads after `-m` parameter. Default's to 1 if not provided or provided without specific number. If 0 or less is givem then it will use number of available vCPUs reported by multiprocessing library.
 
 ### Example in Makefile:
 ```bash
 (venv) root@/DummyProject# make test
 { \
         . venv/bin/activate && \
-        noprint -evv tp -m && \
+        noprint -evvm 0 tp && \
         echo "Finished!" ; \
 }
-[ERROR]:Print statements detected
 [CLEAR]:[tp.exceptions]
 [CLEAR]:[tp.logger]
 [CLEAR]:[tp.cli]
 [ERROR]:[tp] Line: 4
 [ERROR]:[tp.submodule] Line: 20
+[ERROR]:Print statements detected
 make: *** [Makefile:4: test] Error 1
 ```
 

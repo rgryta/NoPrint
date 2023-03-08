@@ -58,9 +58,9 @@ def cli():
     packages = args.packages
     multi = (
         cpu_count()
-        if args.multi == 1
+        if args.multi is not None and args.multi <= 0
         else args.multi
-        if args.multi and args.multi > 0
+        if args.multi
         else 1
     )
 

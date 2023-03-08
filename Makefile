@@ -5,7 +5,7 @@ test:
 		if [ -d "venv" ] ; then	\
 			. venv/bin/activate ; \
 		fi && \
-		noprint -e -f noprint tests && \
+		noprint -efvm 0 noprint tests && \
 		black --check src tests && \
 		pylint -j 0 src tests && \
 		pytest --cov-report term-missing --cov=noprint -s -v tests && \
