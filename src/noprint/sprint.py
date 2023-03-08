@@ -110,9 +110,9 @@ def _get_subpackages(
 
 def _packages_iter(packages: tuple, verbose: bool = False):
     """Iterate over all provided subpackages"""
-    for package in packages:
+    for package in packages:  # pragma: no cover
         for subpackage in _get_subpackages(package, verbose):
-            yield subpackage  # pragma: no cover
+            yield subpackage
 
 
 def apply_first_only(first_only):
@@ -121,7 +121,7 @@ def apply_first_only(first_only):
     def wrapper(func):
         @functools.wraps(func)
         def wrapped(*args):
-            return func(module=args[0], first_only=first_only)
+            return func(module=args[0], first_only=first_only)  # pragma: no cover
 
         return wrapped
 
@@ -179,13 +179,13 @@ def _get_prints(
     global _parse_pyfile  # pylint: disable=global-statement
     _parse_pyfile = apply_first_only(first_only=first_only)(_parse_pyfile)
     with Pool(pool_threads) as pool:
-        for found, exceptions in pool.imap(
+        for found, exception in pool.imap(
             _parse_pyfile, _packages_iter(packages, verbose)
         ):
             if found:
                 prints = prints + found
-            elif exceptions:
-                exceptions.append(exceptions)
+            elif exception:
+                exceptions.append(exception)
             if any(printed for _, printed in found) and first_only:
                 break
     return (

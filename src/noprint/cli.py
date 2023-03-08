@@ -56,7 +56,13 @@ def cli():
     verbose = bool(args.verbose)
     very_verbose = args.verbose >= 2
     packages = args.packages
-    multi = cpu_count() if args.multi == 1 else args.multi if args.multi > 0 else 1
+    multi = (
+        cpu_count()
+        if args.multi == 1
+        else args.multi
+        if args.multi and args.multi > 0
+        else 1
+    )
 
     lvl = logging.ERROR if error_out else logging.WARNING
 
