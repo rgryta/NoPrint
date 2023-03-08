@@ -116,7 +116,7 @@ def test__parse_pyfile(mock_open, mod, first, code):
     res = _parse_pyfile(mod, first)
 
     if isinstance(mod, ImportException):
-        assert res[0] is None
+        assert not res[0]
         assert isinstance(res[1], ImportException)
         assert res[1].args[0] == mod.args[0]
     elif "print" in code:
