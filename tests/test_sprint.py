@@ -7,7 +7,7 @@ import pytest
 
 import noprint.logger as logging
 
-from noprint.sprint import _get_subpackages, _get_prints
+from noprint.sprint import _get_subpackages, _get_prints, _parse_pyfile
 from noprint.exceptions import ImportException
 
 
@@ -99,35 +99,63 @@ def test__get_subpackages__import_exc(mock_spec):
 @pytest.mark.parametrize("first", [True, False])
 @pytest.mark.parametrize("mod", [None, ImportException("X")])
 @mock.patch("builtins.open")
-@mock.patch("noprint.sprint._get_subpackages")
-def test__get_prints(mock_subpackages, mock_open, mod, first, code):
-    """Testing function for _get_prints - verifying if code contains print statements"""
-
-    def _subpackages(package, _):  # pylint: disable=unused-argument
-        i = 0
-        if mod is None:
-            module = mock.Mock()
-            module.origin = "origin"
-            yield module
-        else:
-            yield mod
-        i = i + 1
-        if i == 10:
-            return
-
-    mock_subpackages.side_effect = _subpackages
-
+def test__parse_pyfile(mock_open, mod, first, code):
+    """Test method for _parse_python - finding print statements"""
     fin = mock.Mock()
     fin.return_value.readline.return_value = "# -*- coding: utf-8-sig -*-"
     fin.return_value.read.return_value = code
     mock_open.return_value.__enter__ = fin
 
-    prints = _get_prints(packages=["noprint"], first_only=first, verbose=True)
+    module = mock.Mock()
+    module.origin = "noprint"
+    module.name = "noprint"
+
     if mod is None:
-        if code.startswith("print"):
-            assert "Line:" in prints[0][0][0]
-        else:
-            assert any(found for _, found in prints[0]) is False
-        mock_open.assert_called_with("origin", "r", encoding="utf-8-sig")
+        mod = module
+
+    res = _parse_pyfile(mod, first)
+
+    if isinstance(mod, ImportException):
+        assert not res[0]
+        assert isinstance(res[1], ImportException)
+        assert res[1].args[0] == mod.args[0]
+    elif "print" in code:
+        assert res == ([("[noprint] Line: 1", True)], None)
     else:
-        assert len(prints[1]) > 0
+        assert res == ([("[CLEAR]:[noprint]", False)], None)
+
+
+@pytest.mark.parametrize("first", [True, False])
+@pytest.mark.parametrize(
+    "mod",
+    [
+        (
+            [("X", False)],
+            None,
+        ),
+        (
+            [("X", True)],
+            None,
+        ),
+        (
+            [],
+            ImportException("X"),
+        ),
+    ],
+)
+@mock.patch("noprint.sprint.Pool")
+def test__get_prints(mock_pool, mod, first):
+    """Testing function for _get_prints - verifying if code contains print statements"""
+
+    def _subpackages(package, _):  # pylint: disable=unused-argument
+        i = 0
+        yield mod
+        i = i + 1
+        if i == 10:
+            return
+
+    mock_pool.return_value.__enter__.return_value.imap.side_effect = _subpackages
+
+    prints = _get_prints(packages=["noprint"], first_only=first, verbose=True)
+    expected = (mod[0], [mod[1]] if mod[1] else [])
+    assert prints == expected

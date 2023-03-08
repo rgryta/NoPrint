@@ -3,6 +3,7 @@ CLI module for NoPrint
 """
 import sys
 import argparse
+from multiprocessing import cpu_count
 
 import noprint.logger as logging
 
@@ -39,6 +40,15 @@ def cli():
         nargs="+",
         type=str,
     )
+    parser.add_argument(
+        "-m",
+        "--multi",
+        nargs="?",
+        const=1,
+        type=int,
+        help="set how many threads to use",
+    )
+    parser.add_argument("--version", action="version", version="%(prog)s 1.1.1")
     args = parser.parse_known_intermixed_args()[0]
 
     error_out = args.error_out
@@ -46,10 +56,17 @@ def cli():
     verbose = bool(args.verbose)
     very_verbose = args.verbose >= 2
     packages = args.packages
+    multi = (
+        cpu_count()
+        if args.multi is not None and args.multi <= 0
+        else args.multi
+        if args.multi
+        else 1
+    )
 
     lvl = logging.ERROR if error_out else logging.WARNING
 
-    prints, exceptions = detect_prints(packages, first_only, verbose)
+    prints, exceptions = detect_prints(packages, first_only, verbose, multi)
 
     exitcode = 0
     detected = any(is_print for _, is_print in prints)

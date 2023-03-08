@@ -12,13 +12,21 @@
 
 Do not allow prints in your python code anymore. Official repository of NoPrint package. Packages are scanned recursively.
 
-Additional features:
-1. Warning when any of your submodules are missing `__init__.py` files (reported always as warnings) - use single `-v` to enable that.
-1. You may also receive a warning if one of packages that's being analysed is out of system's scope - it will still be scanned, but that "package" is not reachable outside of that directory, these are e.g. `tests` directories - enabled with `-v`.
-1. You will receive a warning if one of your packages is overshadowing a package available on system/environment level, e.g. if you have requested to analyse your `test` directory, but Python already has an internal package called `test` - enabled with `-v`.
-1. NoPrint will tell you specifically which of your submodules are clear of print statements - use double `-vv` or `-v -v` (some older Python versions) to enable that, `-vv` also enables features from `-v`.
-1. Critical info - if import of one of your modules results with an exception (or is missing - maybe you mistyped your package?).
+## Output readout
 
+Visible always:
+ - Critical info - if import of one of your modules results with an exception (or is missing - maybe you mistyped your package?).
+ - Final result (success, prints detected or critical error)
+
+Verbosity options for `-v`:
+ - Outputs which modules contain print statements at which lines
+ - Warning when any of your submodules are missing `__init__.py` files (reported always as warnings) 
+ - Receive a warning if one of packages that's being analysed is out of system's scope - it will still be scanned, but that "package" is not reachable outside of that directory, these are e.g. `tests` directories
+ - Receive a warning if one of your packages is overshadowing a package available on system/environment level, e.g. if you have requested to analyse your `test` directory, but Python already has an internal package called `test`
+
+Verbosity options for `-vv` (or `-v -v` on older Python versions):
+ - All of the options from `-v`
+ - NoPrint will tell you specifically which of your submodules are clear of print statements
 
 ## Requirements
 
@@ -30,38 +38,45 @@ Pull straight from this repo to install manually or just use pip: `pip install n
 
 ## Usage
 
-Use as command:
+### Use as command:
 ```bash
-usage: NoPrint [-h] [-e] [-f] [-v] packages [packages ...]
+usage: NoPrint [-h] [-e] [-f] [-v] [--version] packages [packages ...] [-m [MULTI]]
 
 Do not allow prints in your code.
 
 positional arguments:
-  packages          which packages/modules to check, syntax: <package>[.<module> ...], e.g. noprint or noprint.cli
+  packages              which packages/modules to check, syntax: <package>[.<module> ...], e.g. noprint or noprint.cli
 
 options:
-  -h, --help        show this help message and exit
-  -e, --error-out   exit with error when print is found (by default only warnings are shown)
-  -f, --first-only  finish on first print found
-  -v, --verbose     provide more analysis information (use multiple v's to increase logging level)
+  -h, --help            show this help message and exit
+  -e, --error-out       exit with error when print is found (by default only warnings are shown)
+  -f, --first-only      finish on first print found
+  -v, --verbose         provide more analysis information (use multiple v's to increase logging level)
+  -m [MULTI], --multi [MULTI]
+                        set how many threads to use
+  --version             show program's version number and exit
 
 Thank you for using NoPrint
 ```
 
-Example in Makefile:
+### Multithreading
+
+Provide number of threads after `-m` parameter. Default's to 1 if not provided or provided without specific number. If 0 or less is givem then it will use number of available vCPUs reported by multiprocessing library.
+
+### Example in Makefile:
 ```bash
 (venv) root@/DummyProject# make test
 { \
         . venv/bin/activate && \
-        noprint -evv tp && \
+        noprint -evvm 0 tp && \
         echo "Finished!" ; \
 }
-[ERROR]:Print statements detected
 [CLEAR]:[tp.exceptions]
 [CLEAR]:[tp.logger]
 [CLEAR]:[tp.cli]
 [ERROR]:[tp] Line: 4
 [ERROR]:[tp.submodule] Line: 20
+[ERROR]:Print statements detected
 make: *** [Makefile:4: test] Error 1
 ```
 
@@ -69,7 +84,7 @@ This package performs recursive tests on itself before being merged - you can ch
 
 ## Development
 
-If you'd like to develop for this package (for some reason) then it's rather straightforward. On Windows start `init.bat` command (WSL2 required). This will install a local WSL2 image with small Ubuntu environment and set up virtual environment for you. If you're already using Unix-based system, you can just use `init.sh` that set's up Python virtual environment.
+If you'd like to develop for this package (for some reason) then it's rather straightforward. On Windows start `init.bat` command (WSL2 required). This will install a local WSL2 image with small Ubuntu environment and set up virtual environment for you. If you're already using Unix-based system, you can just use `init.sh` as that will create Python virtual environment.
 
 Before creating Pull Request, make sure that your tests are passing. This is a small package so I want to maintain 100% coverage - `# pragma: no cover` is only allowed in very specific scenarios (like single line method wrapper).
 
