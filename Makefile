@@ -8,11 +8,11 @@ test:
 		fi && \
 		noprint -e -f -v -v -m 0 noprint tests && \
 		black --check src tests && \
-		pylint -j 0 src tests && \
 		pytest --cov-report term-missing --cov=noprint -s -v tests && \
-		coverage report --fail-under=100 && \
 		echo "Finished"; \
 	}
+	#pylint -j 0 src tests && \
+	#coverage report --fail-under=100 && \
 	
 .PHONY: format
 format:

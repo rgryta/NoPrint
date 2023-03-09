@@ -2,43 +2,28 @@
 Module responsible for finding print statements in python modules
 """
 import os
-import io
 import re
 import sys
 import ast
 import pkgutil
 import functools
 from typing import Optional, Union, Tuple
-from importlib.util import find_spec
-from importlib.machinery import ModuleSpec
+from pathlib import Path
+from importlib.machinery import ModuleSpec, PathFinder
 from multiprocessing.pool import Pool
 
 import noprint.logger as logging
 
 from noprint import ENCODING_CAPTURE
-from noprint.exceptions import ImportException
+from noprint.exceptions import ImportException, ParentModuleNotFoundException
 
 
-def _get_spec(package, in_cwd: bool = True) -> Optional[ModuleSpec]:
-    sys.stdout = sys.stderr = io.StringIO()
-    try:
-        # Allow to search for packges in current directory (mainly for tests directories - not available in sys.modules)
-        if in_cwd:
-            sys.path.insert(0, os.getcwd())
-        module = find_spec(package)
-    except Exception as exc:
-        raise ImportException(
-            f"Module [{package}] raised {type(exc).__name__} on import"
-        ) from exc
-    finally:
-        if in_cwd:
-            sys.path.remove(os.getcwd())
-        sys.stdout, sys.stderr = sys.__stdout__, sys.__stderr__
-
-    return module
+cached_parents = {}
+cached_parents_noncwd = {}
 
 
-def _get_module_path(module: ModuleSpec):
+def _get_module_search_path(module: ModuleSpec):
+    """Get path where submodules are located"""
     pkg_path = module.submodule_search_locations
     if isinstance(pkg_path, list):
         pkg_path = pkg_path[0]
@@ -46,6 +31,72 @@ def _get_module_path(module: ModuleSpec):
         # Patch for _NamespacePath in Python3.7
         pkg_path = pkg_path._path[0]  # pylint: disable=protected-access
     return pkg_path
+
+
+def _get_module_location(module: ModuleSpec):
+    """Get location of the module"""
+    if module.has_location:
+        path = Path(module.origin)
+        if path.name == "__init__.py":
+            path = path.parents[1]
+        else:
+            path = path.parents[0]
+    else:
+        path = Path(_get_module_search_path(module))
+        path = path.parent
+    return str(path)
+
+
+def _find_search_dir(package: str, in_cwd: bool) -> str:
+    """Get location of submodule"""
+    if in_cwd and cached_parents.get(package):
+        return cached_parents.get(package)
+    if not in_cwd and cached_parents_noncwd.get(package):
+        return cached_parents_noncwd.get(package)
+
+    if "." in package:
+        pparent = package.rsplit(".", 1)[0]
+
+        path = _find_search_dir(pparent, in_cwd)
+        module = PathFinder.find_spec(pparent, path=[path])
+
+        path = str(_get_module_search_path(module))
+        cached_parents[package] = path
+        return path
+
+    path = None
+    if in_cwd:
+        path = os.getcwd()
+        sys.path.insert(0, path)
+
+    module = PathFinder.find_spec(package, path=sys.path)
+    if in_cwd:
+        sys.path.remove(path)
+
+    if module is None:
+        raise ParentModuleNotFoundException("Parent module not found")
+    path = _get_module_location(module)
+
+    if in_cwd:
+        cached_parents[package] = path
+    else:
+        cached_parents_noncwd[package] = path
+    return path
+
+
+def _get_spec(package, in_cwd: bool = True) -> Optional[ModuleSpec]:
+    """Get spec based on path"""
+    try:
+        # in_cwd: Allow to search for packges in current directory
+        # (mainly for tests directories - not available in sys.modules)
+        path = _find_search_dir(package, in_cwd)
+        module = PathFinder.find_spec(package, path=[path])
+    except Exception as exc:
+        raise ImportException(
+            f"Module [{package}] raised {type(exc).__name__} on import"
+        ) from exc
+
+    return module
 
 
 def _get_subpackages(
@@ -58,6 +109,7 @@ def _get_subpackages(
     except ImportException as exc:
         yield exc
         return  # pragma: no cover
+    system_module = None
     try:
         system_module = _get_spec(package, in_cwd=False)
     except ImportException:  # pragma: no cover
@@ -79,14 +131,14 @@ def _get_subpackages(
     # If module is a file or contains __init__ then yield it and set flag
     isinit = False
     if module.origin:
-        isinit = str(module.origin).rsplit(sep="/", maxsplit=1)[-1] == "__init__.py"
+        isinit = Path(module.origin).name == "__init__.py"
         yield module
 
     # Grab submodules and all packages within the directory
     candidates = []
     sub_pkgs = []
     if not module.origin or isinit:
-        pkg_path = _get_module_path(module)
+        pkg_path = _get_module_search_path(module)
         candidates = [
             f"{module.name}.{name}"
             for name in os.listdir(pkg_path)
@@ -112,7 +164,11 @@ def _packages_iter(packages: tuple, verbose: bool = False):
     """Iterate over all provided subpackages"""
     for package in packages:  # pragma: no cover
         for subpackage in _get_subpackages(package, verbose):
-            yield subpackage
+            if (
+                not isinstance(subpackage, ImportException)
+                and ".py" in Path(subpackage.origin).suffixes
+            ):
+                yield subpackage
 
 
 def _parse_pyfile(module, first_only):
@@ -126,7 +182,10 @@ def _parse_pyfile(module, first_only):
     # PEP-8, PEP-263, PEP-3120
     with open(module.origin, "r", encoding="utf-8") as file:
         for _ in range(2):  # Check 1st two lines
-            found = re.search(ENCODING_CAPTURE, file.readline())
+            try:
+                found = re.search(ENCODING_CAPTURE, file.readline())
+            except Exception as exc:
+                raise exc
             if found:
                 encoding = found.group(1)
                 break
@@ -166,6 +225,10 @@ def _get_prints(
     exceptions = []
 
     func = functools.partial(_parse_pyfile, first_only=first_only)
+    logging.log(
+        "Starting analysis, depending on package complexity, this may take a few seconds...",
+        logging.INFO,
+    )
     with Pool(pool_threads) as pool:
         for found, exception in pool.imap(func, _packages_iter(packages, verbose)):
             if found:
