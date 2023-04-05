@@ -22,11 +22,13 @@ def test__get_subpackages__correct(mock_os, origin, name):
         mod_mock = mock.MagicMock()
         mod_mock.origin = [origin] if origin is not None else []
         mod_mock.name = name
+        mod_mock.search_path = "loc"
         mod_mock.submodule_search_locations = ["loc"]
 
     mod_mock_e = mock.MagicMock()
     mod_mock_e.origin = ["origin"]
     mod_mock_e.name = "name"
+    mod_mock_e.search_path = "loc"
     mod_mock_e.submodule_search_locations = ["loc"]
 
     mock_os.listdir.return_value = ["name"]
