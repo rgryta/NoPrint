@@ -95,7 +95,7 @@ class Module:
     @property
     def origin(self):
         if self._origin is None:
-            path = self._parent_loc
+            path = Path(self._parent_loc)
             for step in self._package.split(".")[0:-1]:
                 path = os.path.join(path, step)
             # SRC path

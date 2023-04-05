@@ -1,11 +1,9 @@
 """
 Module with tests for noprint.module
 """
-import os
-
 from pathlib import Path
 from unittest import mock
-from importlib.machinery import ModuleSpec, PathFinder
+from importlib.machinery import ModuleSpec
 
 import pytest
 
@@ -26,8 +24,8 @@ def mock_module():
 
     class MockModule(Module):
         def __init__(self):
-            self._package = "test.package"
-            self._parent_loc = "/root"
+            with mock.patch("noprint.module._find_parent_dir", return_value="/root"):
+                super().__init__("test.subpackage")
 
     return MockModule
 
@@ -94,3 +92,35 @@ def test__package_to_dir():
     with mock.patch("noprint.module.os.path.isdir", return_value=False):
         submodules = "test.test.test"
         assert _package_to_dir("test", submodules) is None
+
+
+@pytest.mark.parametrize("found", [False, True])
+def test_module___init__(found):
+    with mock.patch(
+        "noprint.module._find_parent_dir",
+        side_effect=["/root" if found else Exception("exc")],
+    ):
+        if found:
+            mod = Module(package="mod.module")
+            assert mod.name == "mod.module"
+            assert mod._parent_loc == "/root"
+        else:
+            with pytest.raises(ParentModuleNotFoundException):
+                Module(package="mod.module")
+
+
+@pytest.mark.parametrize("isdir", [False, True])
+@pytest.mark.parametrize("isfile", [False, True])
+@mock.patch("noprint.module.os.path.isdir")
+@mock.patch("noprint.module.os.path.isfile")
+def test_module_origin(mock_isfile, mock_isdir, mock_module, isdir, isfile):
+    mock_isdir.return_value = isdir
+    mock_isfile.return_value = isfile
+    module = mock_module()
+    if isfile is False:
+        assert module.origin == []
+    elif isdir is False:
+        assert module.origin == [str(Path("/root/test/subpackage.py"))]
+    else:
+        assert "__init__.py" in [origin[-11:] for origin in module.origin]
+        assert "__main__.py" in [origin[-11:] for origin in module.origin]
