@@ -6,6 +6,7 @@ import os
 import sys
 
 from pathlib import Path
+from functools import lru_cache
 from importlib.machinery import ModuleSpec, PathFinder
 
 from noprint.exceptions import ParentModuleNotFoundException
@@ -36,22 +37,42 @@ def _get_module_location(module: ModuleSpec):
     return str(path)
 
 
+@lru_cache(maxsize=None)
 def _find_parent_dir(package: str, in_cwd: bool) -> str:
     """Get location of submodule"""
-
-    ppackage = package.split(".", maxsplit=1)[0]
-
     paths = sys.path.copy()
     if in_cwd:
         paths.insert(0, os.getcwd())
 
-    module = PathFinder.find_spec(ppackage, path=paths)
+    module = PathFinder.find_spec(package, path=paths)
 
     if module is None:
         raise ParentModuleNotFoundException("Parent module not found")
     path = _get_module_location(module)
 
     return path
+
+
+def _next_path(path, submodules):
+    for i, _ in enumerate(submodules.split(".")):
+        dir_check = submodules.rsplit(".", maxsplit=i)[0]
+        dir_check = os.path.join(path, dir_check)
+        if os.path.isdir(dir_check):
+            return dir_check
+    return None
+
+
+def _package_to_dir(path, submodules):
+    package_path = None
+    for _ in enumerate(submodules.split(".")):
+        package_path = _next_path(path, submodules)
+        if package_path:
+            submodules = submodules[len(package_path) - len(path) :]
+            if os.path.isdir(package_path):
+                path = package_path
+        else:
+            return None
+    return package_path
 
 
 class Module:
@@ -66,7 +87,8 @@ class Module:
     def __init__(self, package: str, in_cwd: bool = True):
         self._package = package
         try:
-            self._parent_loc = _find_parent_dir(package=package, in_cwd=in_cwd)
+            ppackage = package.split(".", maxsplit=1)[0]
+            self._parent_loc = _find_parent_dir(package=ppackage, in_cwd=in_cwd)
         except Exception as exc:
             raise ParentModuleNotFoundException(exc) from exc
 
@@ -92,27 +114,6 @@ class Module:
                     self._origin.append(os.path.join(path, f"{cur_package}.py"))
         return self._origin
 
-    @staticmethod
-    def _next_path(path, submodules):
-        for i, _ in enumerate(submodules.split(".")):
-            dir_check = submodules.rsplit(".", maxsplit=i)[0]
-            dir_check = os.path.join(path, dir_check)
-            if os.path.isdir(dir_check):
-                return dir_check
-        return None
-
-    def _package_to_dir(self, path, submodules):
-        package_path = None
-        for _ in enumerate(submodules.split(".")):
-            package_path = self._next_path(path, submodules)
-            if package_path:
-                submodules = submodules[len(package_path) - len(path) :]
-                if os.path.isdir(package_path):
-                    path = package_path
-            else:
-                return None
-        return package_path
-
     @property
     def name(self):
         return self._package
@@ -120,7 +121,7 @@ class Module:
     @property
     def search_path(self):
         if self._search_path is None:
-            self._search_path = self._package_to_dir(self._parent_loc, self._package)
+            self._search_path = _package_to_dir(self._parent_loc, self._package)
         if self._search_path and os.path.isdir(self._search_path):
             return self._search_path
         return None
