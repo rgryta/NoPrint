@@ -127,7 +127,7 @@ class Module:
         return None
 
     def __eq__(self, other):
-        if other is not None:
+        if isinstance(other, Module):
             pkg_check = self.name == other.name
             ppath_check = self._parent_loc == other._parent_loc
             return all([pkg_check, ppath_check])

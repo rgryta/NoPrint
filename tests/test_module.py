@@ -124,3 +124,21 @@ def test_module_origin(mock_isfile, mock_isdir, mock_module, isdir, isfile):
     else:
         assert "__init__.py" in [origin[-11:] for origin in module.origin]
         assert "__main__.py" in [origin[-11:] for origin in module.origin]
+
+
+@pytest.mark.parametrize("isdir", [False, True])
+@mock.patch("noprint.module.os.path.isdir")
+def test_module_search_path(mock_isdir, mock_module, isdir):
+    mock_isdir.return_value = isdir
+    module = mock_module()
+    with mock.patch("noprint.module._package_to_dir", return_value="/root"):
+        assert [module.search_path] == ["/root" if isdir else None]
+
+
+def test_module___eq__(mock_module):
+    module = mock_module()
+    module_other = mock_module()
+    assert module == module_other
+    module_other._parent_loc = "/nonroot"
+    assert module != module_other
+    assert module != 0
