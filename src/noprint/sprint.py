@@ -6,9 +6,12 @@ import re
 import ast
 import pkgutil
 import functools
+import concurrent.futures as cc
+import time
 from typing import Union, Tuple
 from pathlib import Path
 from importlib.machinery import ModuleSpec
+from multiprocessing import SimpleQueue, Manager
 from multiprocessing.pool import Pool
 
 import noprint.logger as logging
@@ -26,8 +29,7 @@ def _get_subpackages(
     try:
         module = Module(package)
     except ParentModuleNotFoundException as exc:
-        yield ImportException(exc)
-        return  # pragma: no cover
+        return ImportException(exc), None
     system_module = None
     try:
         system_module = Module(package, in_cwd=False)
@@ -35,14 +37,16 @@ def _get_subpackages(
         pass
 
     if not module:
-        yield ImportException(
-            f"Module [{package}] is not present in current environment, directory or PYTHONPATH"
+        return (
+            ImportException(
+                f"Module [{package}] is not present in current environment, directory or PYTHONPATH"
+            ),
+            None,
         )
-        return
 
-    if module and not system_module and verbose:
+    if not system_module and verbose:
         logging.log(f"Module [{package}] is not installed", logging.WARNING)
-    elif module != system_module and verbose:
+    elif module != system_module and verbose and len(system_module.origin) > 0:
         logging.log(
             f"Module [{package}] is overshadowing installed module", logging.WARNING
         )
@@ -52,7 +56,6 @@ def _get_subpackages(
     if module.origin:
         candidates = [Path(orig).name for orig in module.origin]
         isinit = "__init__.py" in candidates
-        yield module
 
     # Grab submodules and all packages within the directory
     candidates = []
@@ -77,16 +80,61 @@ def _get_subpackages(
     # Patch missing submodules
     sub_pkgs = list(set(candidates) | set(sub_pkgs))
 
+    mod = None
+    func = []
     for pkg in sub_pkgs:
-        for subpkg in _get_subpackages(pkg):
-            yield subpkg
+        func = func + [
+            functools.partial(_get_subpackages, package=pkg, verbose=verbose)
+        ]
+    if module.origin:
+        mod = module
+    return mod, func
 
 
-def _packages_iter(packages: tuple, verbose: bool = False):
-    """Iterate over all provided subpackages"""
-    for package in packages:  # pragma: no cover
-        for subpackage in _get_subpackages(package, verbose):
-            yield subpackage
+class PackageFinder:
+    executor = None
+    sq = None
+
+    l = []
+    res = []
+
+    def __init__(self):
+        # self.executor = MyExecutor()
+        self.executor = cc.ProcessPoolExecutor()
+        self.sq = SimpleQueue()
+        self.mg = Manager()
+
+        self.p = Pool(24)
+
+    def err(self, check):
+        import traceback
+
+        traceback.print_exc()
+
+    def callback(self, res):
+        self.res.append(res[0])
+        for func in res[1]:
+            res = self.p.apply_async(
+                func, callback=self.callback, error_callback=self.err
+            )
+            self.l.append(res)
+
+    def packages_iter(self, packages: tuple, verbose: bool = False):
+        """Iterate over all provided subpackages"""
+        for package in packages:  # pragma: no cover
+            func = functools.partial(_get_subpackages, package=package, verbose=verbose)
+            res = self.p.apply_async(
+                func, callback=self.callback, error_callback=self.err
+            )
+            self.l.append(res)
+
+        while len(self.l) > 0:
+            for job in list(self.l):
+                if job.ready():
+                    self.l.remove(job)
+                    res = self.res.pop()
+                    if res:
+                        yield res
 
 
 def _parse_pyfile(module, first_only):
@@ -148,8 +196,8 @@ def _get_prints(
         "Starting analysis, depending on package complexity, this may take a few seconds...",
         logging.INFO,
     )
-
-    pkgs = [x for x in _packages_iter(packages, verbose)]
+    pf = PackageFinder()
+    pkgs = [x for x in pf.packages_iter(packages, verbose)]
     with Pool(pool_threads) as pool:
         for found, exception in pool.imap(func, pkgs):
             if found:
