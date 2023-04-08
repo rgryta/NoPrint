@@ -1,5 +1,5 @@
 """
-Module with tests for noprint.print_seeker
+Module with tests for noprint.logger
 """
 import logging
 

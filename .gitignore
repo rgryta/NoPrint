@@ -1,5 +1,7 @@
 env-setup/ext4.vhdx
 
+.idea
+
 venv
 dist
 src/noprint.egg-info
@@ -8,3 +10,4 @@ src/noprint.egg-info
 
 .pytest_cache
 .coverage
+*.lprof
