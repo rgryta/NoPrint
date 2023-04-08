@@ -57,17 +57,19 @@ def test_parse_module(origin, sub_pkgs):
         assert len(result[1]) == len(sub_pkgs)
 
 
-def _parse_mock(package, verbose):
+def _parse_mock(package, verbose):  # pylint:disable=unused-argument
+    """Helper function for mocking _parse_module (Pool pickling)"""
     return (package, [])
 
 
 def test_pf_packages_iter():
-    pf = PackageFinder(1)
+    """Testing PackageFinder.packages_iter"""
+    pkg_finder = PackageFinder(1)
 
-    noprint.sprint._parse_module = _parse_mock
+    noprint.sprint._parse_module = _parse_mock  # pylint:disable=protected-access
 
     packages = ("source", "test")
-    assert set([x for x in pf.packages_iter(packages=packages)]) == set(packages)
+    assert set(pkg_finder.packages_iter(packages=packages)) == set(packages)
 
 
 @pytest.mark.parametrize(
@@ -96,7 +98,7 @@ def test__get_module__import_exc(ret):
 
     with mock.patch("noprint.sprint.Module") as mock_mod, pytest.raises(
         ImportException
-    ) as exc:
+    ):
         if ret is None:
             mock_mod.return_value = ret
         else:
@@ -155,7 +157,7 @@ def test__parse_pyfile(mock_open, mod, first, code):
 @mock.patch(
     "noprint.sprint._parse_pyfile", side_effect=lambda module, first_only: module
 )
-def test_pf_run(mock_parse, mod, first):
+def test_pf_run(mock_parse, mod, first):  # pylint: disable=unused-argument
     """Testing function for _get_prints - verifying if code contains print statements"""
 
     def _subpackages(package, _):  # pylint: disable=unused-argument

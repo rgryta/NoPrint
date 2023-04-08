@@ -6,7 +6,7 @@ import re
 import ast
 import pkgutil
 import functools
-from typing import Union, Tuple
+from typing import Tuple
 from pathlib import Path
 from multiprocessing.pool import Pool
 
@@ -22,24 +22,30 @@ def _get_module(package, verbose):
     try:
         module = Module(package)
     except ParentModuleNotFoundException as exc:
-        raise ImportException(exc)
+        raise ImportException(exc) from exc
+    if not module:
+        raise ImportException(
+            f"Module [{package}] is not present in current environment, directory or PYTHONPATH"
+        )
+
     system_module = None
     try:
         system_module = Module(package, in_cwd=False)
     except ParentModuleNotFoundException:  # pragma: no cover
         pass
 
-    if not module:
-        raise ImportException(
-            f"Module [{package}] is not present in current environment, directory or PYTHONPATH"
-        )
-
     if not system_module and verbose:
         logging.log(f"Module [{package}] is not installed", logging.WARNING)
-    elif module != system_module and len(system_module.origin) > 0 and verbose:
+    elif (
+        module != system_module
+        and system_module
+        and len(system_module.origin) > 0
+        and verbose
+    ):
         logging.log(
             f"Module [{package}] is overshadowing installed module", logging.WARNING
         )
+
     return module
 
 
@@ -110,12 +116,16 @@ def _parse_pyfile(module, first_only):
         with open(mod_file, "r", encoding=encoding) as file:
             parsed = ast.parse(file.read())
             clear = True
+            name = ""
+            if mod_file.endswith("__init__.py") or mod_file.endswith("__main__.py"):
+                name = f".{mod_file[-11:-3]}"
             for node in ast.walk(parsed):
                 if node.__dict__.get("id") == "print":
                     clear = False
+
                     prints.append(
                         (
-                            f"[{module.name}] Line: {node.lineno}",
+                            f"[{module.name}{name}] Line: {node.lineno}",
                             True,
                         )
                     )
@@ -124,7 +134,7 @@ def _parse_pyfile(module, first_only):
             if clear:
                 prints.append(
                     (
-                        f"[CLEAR]:[{module.name}]",
+                        f"[CLEAR]:[{module.name}{name}]",
                         False,
                     )
                 )
@@ -204,5 +214,5 @@ def detect_prints(
         logging.INFO,
     )
 
-    pf = PackageFinder(pool_threads + 4)
-    return pf.run(first_only, packages, verbose)
+    pkg_finder = PackageFinder(pool_threads)
+    return pkg_finder.run(first_only, packages, verbose)

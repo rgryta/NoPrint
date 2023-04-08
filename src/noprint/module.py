@@ -76,6 +76,8 @@ def _package_to_dir(path, submodules):
 
 
 class Module:
+    """Module class to use instead of official classes which import main package when submodule is provided"""
+
     _origin = None
     _name = None
 
@@ -94,6 +96,7 @@ class Module:
 
     @property
     def origin(self):
+        """Function to recover module origin - file paths"""
         if self._origin is None:
             path = Path(self._parent_loc)
             for step in self._package.split(".")[0:-1]:
@@ -116,10 +119,12 @@ class Module:
 
     @property
     def name(self):
+        """Recover package name"""
         return self._package
 
     @property
     def search_path(self):
+        """Get path to use for searching submodules"""
         if self._search_path is None:
             self._search_path = _package_to_dir(self._parent_loc, self._package)
         if self._search_path and os.path.isdir(self._search_path):

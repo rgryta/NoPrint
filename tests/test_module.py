@@ -18,23 +18,12 @@ from noprint.module import (
 )
 
 
-@pytest.fixture
-def mock_module():
-    """Mock a module for testing"""
-
-    class MockModule(Module):
-        def __init__(self):
-            with mock.patch("noprint.module._find_parent_dir", return_value="/root"):
-                super().__init__("test.subpackage")
-
-    return MockModule
-
-
 @pytest.mark.parametrize("search_loc", [["/root"], mock.Mock()])
 def test__get_module_search_path(search_loc):
+    """Testing _get_module_search_path"""
     mspec = mock.Mock()
     if isinstance(search_loc, mock.Mock):
-        search_loc._path = ["/root"]
+        search_loc._path = ["/root"]  # pylint:disable=protected-access
     mspec.submodule_search_locations = search_loc
     assert _get_module_search_path(mspec) == "/root"
 
@@ -42,6 +31,7 @@ def test__get_module_search_path(search_loc):
 @pytest.mark.parametrize("has_loc", [False, True])
 @pytest.mark.parametrize("file_name", ["file.py", "__init__.py", "file.nopy"])
 def test__get_module_location(has_loc, file_name):
+    """Testing _get_module_location"""
     mspec = mock.Mock()
     mspec.has_location = has_loc
     mspec.origin = f"/root/test/{file_name}"
@@ -57,6 +47,7 @@ def test__get_module_location(has_loc, file_name):
 @pytest.mark.parametrize("in_cwd", [False, True])
 @pytest.mark.parametrize("found", [False, True])
 def test__find_parent_dir(in_cwd, found):
+    """Testing _find_parent_dir"""
     with mock.patch("noprint.module.PathFinder.find_spec") as mod_findspec:
         mock_mod = mock.Mock(spec=ModuleSpec)
         mock_mod.origin = "origin"
@@ -73,17 +64,19 @@ def test__find_parent_dir(in_cwd, found):
     "isdir", [[True], [False, True], [False, False, True], [False, False, False]]
 )
 def test__next_path(isdir):
+    """Testing _next_path"""
     with mock.patch("noprint.module.os.path.isdir", side_effect=isdir):
         submodules = "test.test.test"
         res = _next_path("test", submodules)
         if any(isdir):
-            count = sum([not bls for bls in isdir])
+            count = sum(not bls for bls in isdir)
             assert res == str(Path("test/" + submodules.rsplit(".", maxsplit=count)[0]))
         else:
             assert res is None
 
 
 def test__package_to_dir():
+    """Testing _package_to_dir"""
     with mock.patch("noprint.module.os.path.isdir", return_value=True):
         submodules = "test.test.test"
         assert str(Path(_package_to_dir("test", submodules))) == str(
@@ -96,6 +89,7 @@ def test__package_to_dir():
 
 @pytest.mark.parametrize("found", [False, True])
 def test_module___init__(found):
+    """Testing Module.__init__"""
     with mock.patch(
         "noprint.module._find_parent_dir",
         side_effect=["/root" if found else Exception("exc")],
@@ -103,7 +97,7 @@ def test_module___init__(found):
         if found:
             mod = Module(package="mod.module")
             assert mod.name == "mod.module"
-            assert mod._parent_loc == "/root"
+            assert mod._parent_loc == "/root"  # pylint:disable=protected-access
         else:
             with pytest.raises(ParentModuleNotFoundException):
                 Module(package="mod.module")
@@ -114,6 +108,7 @@ def test_module___init__(found):
 @mock.patch("noprint.module.os.path.isdir")
 @mock.patch("noprint.module.os.path.isfile")
 def test_module_origin(mock_isfile, mock_isdir, mock_module, isdir, isfile):
+    """Testing Module.origin"""
     mock_isdir.return_value = isdir
     mock_isfile.return_value = isfile
     module = mock_module()
@@ -129,6 +124,7 @@ def test_module_origin(mock_isfile, mock_isdir, mock_module, isdir, isfile):
 @pytest.mark.parametrize("isdir", [False, True])
 @mock.patch("noprint.module.os.path.isdir")
 def test_module_search_path(mock_isdir, mock_module, isdir):
+    """Testing Module.search_path"""
     mock_isdir.return_value = isdir
     module = mock_module()
     with mock.patch("noprint.module._package_to_dir", return_value="/root"):
@@ -136,9 +132,10 @@ def test_module_search_path(mock_isdir, mock_module, isdir):
 
 
 def test_module___eq__(mock_module):
+    """Testing Module.__eq__"""
     module = mock_module()
     module_other = mock_module()
     assert module == module_other
-    module_other._parent_loc = "/nonroot"
+    module_other._parent_loc = "/nonroot"  # pylint:disable=protected-access
     assert module != module_other
     assert module != 0

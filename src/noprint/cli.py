@@ -62,7 +62,7 @@ def cli():
         else args.multi
         if args.multi
         else 1
-    )
+    )  # cpu_count when <=0; 1 when not given; otherwise multi
 
     lvl = logging.ERROR if error_out else logging.WARNING
 

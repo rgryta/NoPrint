@@ -25,7 +25,7 @@ Verbosity options for `-v`:
  - Receive a warning if one of your packages is overshadowing a package available on system/environment level, e.g. if you have requested to analyse your `test` directory, but Python already has an internal package called `test`
 
 Verbosity options for `-vv` (or `-v -v` on older Python versions):
- - All of the options from `-v`
+ - All the options from `-v`
  - NoPrint will tell you specifically which of your submodules are clear of print statements
 
 ## Requirements
@@ -61,7 +61,7 @@ Thank you for using NoPrint
 
 ### Multithreading
 
-Provide number of threads after `-m` parameter. Default's to 1 if not provided or provided without specific number. If 0 or less is givem then it will use number of available vCPUs reported by multiprocessing library.
+Provide number of threads after `-m` parameter. Default's to 1 if not provided or provided without specific number. If 0 or less is given then it will use number of available vCPUs reported by multiprocessing library.
 
 ### Example in Makefile:
 ```bash
@@ -86,7 +86,7 @@ This package performs recursive tests on itself before being merged - you can ch
 
 If you'd like to develop for this package (for some reason) then it's rather straightforward. On Windows start `init.bat` command (WSL2 required). This will install a local WSL2 image with small Ubuntu environment and set up virtual environment for you. If you're already using Unix-based system, you can just use `init.sh` as that will create Python virtual environment.
 
-Before creating Pull Request, make sure that your tests are passing. This is a small package so I want to maintain 100% coverage - `# pragma: no cover` is only allowed in very specific scenarios (like single line method wrapper).
+Before creating Pull Request, make sure that your tests are passing. This is a small package, so I want to maintain 100% coverage - `# pragma: no cover` is only allowed in very specific scenarios (like single line method wrapper).
 
 ## Want to show off?
 
