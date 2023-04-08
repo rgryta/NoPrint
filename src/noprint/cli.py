@@ -48,7 +48,7 @@ def cli():
         type=int,
         help="set how many threads to use",
     )
-    parser.add_argument("--version", action="version", version="%(prog)s 2.0.0")
+    parser.add_argument("--version", action="version", version="%(prog)s 3.0.0")
     args = parser.parse_known_intermixed_args()[0]
 
     error_out = args.error_out
