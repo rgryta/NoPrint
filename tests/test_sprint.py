@@ -7,14 +7,14 @@ import pytest
 
 import noprint.logger as logging
 
-from noprint.sprint import _get_subpackages, _get_prints, _parse_pyfile
+from noprint.sprint import PackageFinder, _parse_pyfile, _get_module
 from noprint.exceptions import ImportException, ParentModuleNotFoundException
 
 
 @pytest.mark.parametrize("origin", [None, "origin", "__init__.py"])
 @pytest.mark.parametrize("name", [None, "name", "__pycache__"])
 @mock.patch("noprint.sprint.os")
-def test__get_subpackages__correct(mock_os, origin, name):
+def _get_subpackages__correct(mock_os, origin, name):
     """Testing function for _get_subpackages - mock several different module specs and finish with a proper one"""
     if origin is None and name is None:
         mod_mock = None
@@ -45,7 +45,7 @@ def test__get_subpackages__correct(mock_os, origin, name):
 
 @pytest.mark.parametrize("spec", [None, mock.MagicMock(), True])
 @mock.patch("noprint.sprint.logging")
-def test__get_subpackages__missing_uninstalled_overshadowing(mock_logging, spec):
+def _get_subpackages__missing_uninstalled_overshadowing(mock_logging, spec):
     """Testing function for _get_subpackages - mock several different module specs and finish with a proper one"""
     spec_system = mock.MagicMock()
 
@@ -81,17 +81,28 @@ def test__get_subpackages__missing_uninstalled_overshadowing(mock_logging, spec)
             )
 
 
-def test__get_subpackages__import_exc():
+@pytest.mark.parametrize("ret", [[mock.MagicMock(), mock.MagicMock()], [mock.MagicMock(), None], [mock.MagicMock()]*2])
+def test__get_module__mod(ret):
     """Testing function for _get_subpackages - mock several different module specs and finish with a proper one"""
 
     with mock.patch("noprint.sprint.Module") as mock_mod:
-        mock_mod.side_effect = [ParentModuleNotFoundException("Dummy exception")]
-        fun = iter(_get_subpackages("noprint"))
-        res = next(fun).args[0]
-        assert type(res) == ParentModuleNotFoundException
-        assert str(res) == "Dummy exception"
-        with pytest.raises(StopIteration):
-            next(fun)
+        if isinstance(ret[1], mock.MagicMock):
+            ret[1].origin.__len__.return_value = 1
+        mock_mod.side_effect = ret
+        _get_module("noprint", verbose=True)
+
+
+@pytest.mark.parametrize("ret", [None, ParentModuleNotFoundException("Dummy exception")])
+def test__get_module__import_exc(ret):
+    """Testing function for _get_subpackages - mock several different module specs and finish with a proper one"""
+
+    with mock.patch("noprint.sprint.Module") as mock_mod, \
+            pytest.raises(ImportException) as exc:
+        if ret is None:
+            mock_mod.return_value = ret
+        else:
+            mock_mod.side_effect = ret
+        _get_module("noprint", verbose=True)
 
 
 @pytest.mark.parametrize("code", ["print('')", "", "i=1"])
@@ -142,8 +153,9 @@ def test__parse_pyfile(mock_open, mod, first, code):
         ),
     ],
 )
+@mock.patch("noprint.sprint._parse_pyfile", side_effect=lambda module, first_only: module)
 @mock.patch("noprint.sprint.Pool")
-def test__get_prints(mock_pool, mod, first):
+def test_pf_run(mock_pool, mock_parse, mod, first):
     """Testing function for _get_prints - verifying if code contains print statements"""
 
     def _subpackages(package, _):  # pylint: disable=unused-argument
@@ -153,8 +165,9 @@ def test__get_prints(mock_pool, mod, first):
         if i == 10:
             return
 
-    mock_pool.return_value.__enter__.return_value.imap.side_effect = _subpackages
-
-    prints = _get_prints(packages=["noprint"], first_only=first, verbose=True)
-    expected = (mod[0], [mod[1]] if mod[1] else [])
-    assert prints == expected
+    with mock.patch("noprint.sprint.PackageFinder.packages_iter", side_effect=_subpackages):
+        prints = PackageFinder(1).run(
+            packages=["noprint"], first_only=first, verbose=True
+        )
+        expected = (mod[0], [mod[1]] if mod[1] else [])
+        assert prints == expected
