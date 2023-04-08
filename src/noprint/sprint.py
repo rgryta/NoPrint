@@ -118,7 +118,7 @@ def _parse_pyfile(module, first_only):
             clear = True
             name = ""
             if mod_file.endswith("__init__.py") or mod_file.endswith("__main__.py"):
-                name = f".{mod_file[-11:-3]}"
+                name = f".{mod_file[-11:-3]}"  # pragma: no cover
             for node in ast.walk(parsed):
                 if node.__dict__.get("id") == "print":
                     clear = False
