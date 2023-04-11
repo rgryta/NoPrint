@@ -6,7 +6,7 @@ import re
 import ast
 import pkgutil
 import functools
-from typing import Tuple
+import contextvars
 from pathlib import Path
 from multiprocessing.pool import Pool
 
@@ -17,7 +17,15 @@ from noprint.module import Module
 from noprint.exceptions import ImportException, ParentModuleNotFoundException
 
 
-def _get_module(package, verbose):
+packages = contextvars.ContextVar("packages", default=[])
+mt_threads = contextvars.ContextVar("mt_threads", default=1)
+log_lvl = contextvars.ContextVar("log_lvl", default=logging.WARNING)
+first_only = contextvars.ContextVar("first_only", default=False)
+verbose = contextvars.ContextVar("verbose", default=False)
+very_verbose = contextvars.ContextVar("very_verbose", default=False)
+
+
+def _get_module(package):
     """Get Module of the package"""
     try:
         module = Module(package)
@@ -34,14 +42,16 @@ def _get_module(package, verbose):
     except ParentModuleNotFoundException:  # pragma: no cover
         pass
 
-    if not system_module and verbose:
-        logging.log(f"Module [{package}] is not installed", logging.WARNING)
+    if not system_module and verbose.get():
+        logging.log(
+            f"Module [{package}] is not installed", logging.WARNING
+        )  # pragma: no cover
     elif (
-        module != system_module
+        verbose.get()
         and system_module
+        and module != system_module
         and len(system_module.origin) > 0
-        and verbose
-    ):
+    ):  # pragma: no cover
         logging.log(
             f"Module [{package}] is overshadowing installed module", logging.WARNING
         )
@@ -49,7 +59,7 @@ def _get_module(package, verbose):
     return module
 
 
-def _get_subpackages(package, verbose, module):
+def _get_subpackages(package, module):
     """Get all candidates for submodules"""
     # If module is a file or contains __init__ then yield it and set flag
     isinit = False
@@ -74,32 +84,33 @@ def _get_subpackages(package, verbose, module):
             ]
     # If submodule is a directory and doesn't contain __init__ raise Warning
     candidates_missing = set(candidates) - set(sub_pkgs)
-    if isinit and candidates_missing and verbose:
+    if isinit and candidates_missing and verbose.get():  # pragma: no cover
         for candidate in candidates_missing:
             logging.log(f"Module [{candidate}] has no __init__.py", logging.WARNING)
     # Patch missing submodules
     return list(set(candidates) | set(sub_pkgs))
 
 
-def _parse_module(package: str, verbose: bool = False):
+def _parse_module(package: str):
     """Grab all packages and subpackages"""
-    module = _get_module(package, verbose)
+    module = _get_module(package)
 
-    sub_pkgs = _get_subpackages(package, verbose, module)
+    sub_pkgs = _get_subpackages(package, module)
 
     funcs = []
     for pkg in sub_pkgs:
-        funcs = funcs + [functools.partial(_parse_module, package=pkg, verbose=verbose)]
+        funcs = funcs + [functools.partial(_parse_module, package=pkg)]
     return module if module.origin else None, funcs
 
 
-def _parse_pyfile(module, first_only):
+def _parse_pyfile(module):
     """Method for parsing python source code files to look for prints"""
     if isinstance(module, ImportException):
-        return ([], module)
+        logging.log(module.args[0], logging.CRITICAL)
+        return 2
 
-    prints = []
     encoding = "utf-8"
+    status = 0
     # First two lines of Python source code have to be ASCII compatible
     # PEP-8, PEP-263, PEP-3120
     for mod_file in module.origin:
@@ -107,8 +118,10 @@ def _parse_pyfile(module, first_only):
             for _ in range(2):  # Check 1st two lines
                 try:
                     found = re.search(ENCODING_CAPTURE, file.readline())
+                # pylint: disable=broad-exception-caught
                 except Exception as exc:  # pragma: no cover
-                    raise exc
+                    logging.log(exc.args[0], logging.CRITICAL)
+                    return 2
                 if found:
                     encoding = found.group(1)
                     break
@@ -122,23 +135,19 @@ def _parse_pyfile(module, first_only):
             for node in ast.walk(parsed):
                 if node.__dict__.get("id") == "print":
                     clear = False
-
-                    prints.append(
-                        (
-                            f"[{module.name}{name}] Line: {node.lineno}",
-                            True,
+                    status = 1
+                    if verbose.get():  # pragma: no cover
+                        logging.log(
+                            f"[{module.name}{name}] Line: {node.lineno}", log_lvl.get()
                         )
-                    )
-                    if first_only:
-                        return (prints, None)
-            if clear:
-                prints.append(
-                    (
-                        f"[CLEAR]:[{module.name}{name}]",
-                        False,
-                    )
-                )
-    return (prints, None)
+
+                    if first_only.get():  # pragma: no cover
+                        return status
+            if clear and very_verbose.get():
+                logging.log(
+                    f"[CLEAR]:[{module.name}{name}]", logging.INFO
+                )  # pragma: no cover
+    return status
 
 
 class PackageFinder:
@@ -147,8 +156,8 @@ class PackageFinder:
     processes = []
     results = []
 
-    def __init__(self, threads):  # pragma: no cover
-        self.pool = Pool(threads)
+    def __init__(self):  # pragma: no cover
+        self.pool = Pool(mt_threads.get())
 
     def err_callback(self, exc):  # pragma: no cover
         """Error callback from searching module"""
@@ -163,10 +172,10 @@ class PackageFinder:
             )
             self.processes.append(proc)
 
-    def packages_iter(self, packages: tuple, verbose: bool = False):
+    def packages_iter(self):
         """Iterate over all provided subpackages"""
-        for package in packages:
-            func = functools.partial(_parse_module, package=package, verbose=verbose)
+        for package in packages.get():
+            func = functools.partial(_parse_module, package=package)
             proc = self.pool.apply_async(
                 func, callback=self.callback, error_callback=self.err_callback
             )
@@ -180,39 +189,37 @@ class PackageFinder:
                     if res:
                         yield res
 
-    def run(self, first_only, packages, verbose):
+    def run(self):
         """Find print statements and potential exceptions from selected packages"""
-        prints = []
-        exceptions = []
+        results = []
 
-        func = functools.partial(_parse_pyfile, first_only=first_only)
-        for module in self.packages_iter(packages, verbose):
-            found, exception = func(module)
-            if found:
-                prints = prints + found
-            elif exception:
-                exceptions.append(exception)
-            if any(printed for _, printed in found) and first_only:
+        for module in self.packages_iter():
+            res = _parse_pyfile(module)
+            results.append(res)
+            if res >= 1 and first_only.get():  # pragma: no cover
                 break
         self.pool.terminate()
         self.pool.join()
-        return (
-            prints,
-            exceptions,
-        )
+        return max(results)
 
 
-def detect_prints(
-    packages: tuple,
-    first_only: bool = False,
-    verbose: bool = False,
-    pool_threads: int = 1,
-) -> Tuple[list, list]:  # pragma: no cover
+def detect_prints() -> int:  # pragma: no cover
     """Detect print statements from packages found by _get_subpackages"""
+    # pylint: disable=unnecessary-lambda-assignment
+    get_var = lambda name, ctx: [var.get() for var in iter(ctx) if var.name == name][0]
+
+    ctx = contextvars.copy_context()
+
+    packages.set(get_var("packages", ctx))
+    mt_threads.set(get_var("mt_threads", ctx))
+    log_lvl.set(get_var("log_lvl", ctx))
+    first_only.set(get_var("first_only", ctx))
+    verbose.set(get_var("verbose", ctx))
+    very_verbose.set(get_var("very_verbose", ctx))
+
     logging.log(
         "Starting analysis, depending on package complexity, this may take a few seconds...",
         logging.INFO,
     )
-
-    pkg_finder = PackageFinder(pool_threads)
-    return pkg_finder.run(first_only, packages, verbose)
+    pkg_finder = PackageFinder()
+    return pkg_finder.run()
