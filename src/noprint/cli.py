@@ -3,6 +3,7 @@ CLI module for NoPrint
 """
 import sys
 import argparse
+import contextvars
 from multiprocessing import cpu_count
 
 import noprint.logger as logging
@@ -10,7 +11,11 @@ import noprint.logger as logging
 from noprint.sprint import detect_prints
 
 
-def cli():
+log_lvl = contextvars.ContextVar("log_lvl")
+error_out = contextvars.ContextVar("error_out")
+
+
+def parse_args():
     """No prints are allowed!"""
     parser = argparse.ArgumentParser(
         prog="NoPrint",
@@ -51,7 +56,7 @@ def cli():
     parser.add_argument("--version", action="version", version="%(prog)s 3.0.0")
     args = parser.parse_known_intermixed_args()[0]
 
-    error_out = args.error_out
+    err_out = args.error_out
     first_only = args.first_only
     verbose = bool(args.verbose)
     very_verbose = args.verbose >= 2
@@ -64,32 +69,36 @@ def cli():
         else 1
     )  # cpu_count when <=0; 1 when not given; otherwise multi
 
-    lvl = logging.ERROR if error_out else logging.WARNING
+    lvl = logging.ERROR if err_out else logging.WARNING
 
-    prints, exceptions = detect_prints(packages, first_only, verbose, multi)
+    var = contextvars.ContextVar("packages")
+    var.set(packages)
+    var = contextvars.ContextVar("first_only")
+    var.set(first_only)
+    var = contextvars.ContextVar("verbose")
+    var.set(verbose)
+    var = contextvars.ContextVar("very_verbose")
+    var.set(very_verbose)
+    var = contextvars.ContextVar("mt_threads")
+    var.set(multi)
 
-    exitcode = 0
-    detected = any(is_print for _, is_print in prints)
+    log_lvl.set(lvl)
+    error_out.set(err_out)
 
-    if error_out and detected:
-        exitcode = 1
 
-    if exceptions:
-        for exc in exceptions:
-            logging.log(exc.args[0], logging.CRITICAL)
-        exitcode = 2
+def cli():
+    """CLI function"""
+    parse_args()
 
-    if verbose:
-        for prt in prints:
-            if prt[1]:
-                logging.log(prt[0], lvl)
-            elif very_verbose:
-                logging.log(prt[0], logging.INFO)
+    result = detect_prints()
 
-    if exceptions:
+    if result == 2:
         logging.log("Exiting with critical status", logging.CRITICAL)
-    elif detected:
-        logging.log("Print statements detected", lvl)
+    elif result == 1:
+        logging.log("Print statements detected", log_lvl.get())
     else:
         logging.log("No print statements found, cheers 🍺", logging.INFO)
-    sys.exit(exitcode)  # 0 when success, 1 for error, 2 for critical
+
+    if not error_out.get() and result == 1:
+        result = 0
+    sys.exit(result)  # 0 when success, 1 for error, 2 for critical

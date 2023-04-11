@@ -1,6 +1,7 @@
 """
 Module with tests for noprint.sprint
 """
+import contextvars
 from unittest import mock
 
 import pytest
@@ -36,7 +37,7 @@ def test_get_subpackages(mock_os, origin, name):
 
     mock_os.listdir.return_value = ["name"]
 
-    for package in _get_subpackages("noprint", verbose=True, module=mod_mock):
+    for package in _get_subpackages("noprint", module=mod_mock):
         assert package is not None
 
 
@@ -57,19 +58,22 @@ def test_parse_module(origin, sub_pkgs):
         assert len(result[1]) == len(sub_pkgs)
 
 
-def _parse_mock(package, verbose):  # pylint:disable=unused-argument
+def _parse_mock(package):  # pylint:disable=unused-argument
     """Helper function for mocking _parse_module (Pool pickling)"""
     return (package, [])
 
 
 def test_pf_packages_iter():
     """Testing PackageFinder.packages_iter"""
-    pkg_finder = PackageFinder(1)
+    pkg_finder = PackageFinder()
 
     noprint.sprint._parse_module = _parse_mock  # pylint:disable=protected-access
 
     packages = ("source", "test")
-    assert set(pkg_finder.packages_iter(packages=packages)) == set(packages)
+    var = contextvars.ContextVar("packages")
+    var.set(packages)
+    noprint.sprint.packages = var
+    assert set(pkg_finder.packages_iter()) == set(packages)
 
 
 @pytest.mark.parametrize(
@@ -87,7 +91,7 @@ def test__get_module__mod(ret):
         if isinstance(ret[1], mock.MagicMock):
             ret[1].origin.__len__.return_value = 1
         mock_mod.side_effect = ret
-        _get_module("noprint", verbose=True)
+        _get_module("noprint")
 
 
 @pytest.mark.parametrize(
@@ -103,14 +107,13 @@ def test__get_module__import_exc(ret):
             mock_mod.return_value = ret
         else:
             mock_mod.side_effect = ret
-        _get_module("noprint", verbose=True)
+        _get_module("noprint")
 
 
 @pytest.mark.parametrize("code", ["print('')", "", "i=1"])
-@pytest.mark.parametrize("first", [True, False])
 @pytest.mark.parametrize("mod", [None, ImportException("X")])
 @mock.patch("builtins.open")
-def test__parse_pyfile(mock_open, mod, first, code):
+def test__parse_pyfile(mock_open, mod, code):
     """Test method for _parse_python - finding print statements"""
     fin = mock.Mock()
     fin.return_value.readline.return_value = "# -*- coding: utf-8-sig -*-"
@@ -124,16 +127,14 @@ def test__parse_pyfile(mock_open, mod, first, code):
     if mod is None:
         mod = module
 
-    res = _parse_pyfile(mod, first)
+    res = _parse_pyfile(mod)
 
     if isinstance(mod, ImportException):
-        assert not res[0]
-        assert isinstance(res[1], ImportException)
-        assert res[1].args[0] == mod.args[0]
+        assert res == 2
     elif "print" in code:
-        assert res == ([("[noprint] Line: 1", True)], None)
+        assert res == 1  # ([("[noprint] Line: 1", True)], None)
     else:
-        assert res == ([("[CLEAR]:[noprint]", False)], None)
+        assert res == 0  # ([("[CLEAR]:[noprint]", False)], None)
 
 
 @pytest.mark.parametrize("first", [True, False])
@@ -154,13 +155,11 @@ def test__parse_pyfile(mock_open, mod, first, code):
         ),
     ],
 )
-@mock.patch(
-    "noprint.sprint._parse_pyfile", side_effect=lambda module, first_only: module
-)
+@mock.patch("noprint.sprint._parse_pyfile", side_effect=lambda *args, **kwargs: 0)
 def test_pf_run(mock_parse, mod, first):  # pylint: disable=unused-argument
     """Testing function for _get_prints - verifying if code contains print statements"""
 
-    def _subpackages(package, _):  # pylint: disable=unused-argument
+    def _subpackages():  # pylint: disable=unused-argument
         i = 0
         yield mod
         i = i + 1
@@ -170,8 +169,9 @@ def test_pf_run(mock_parse, mod, first):  # pylint: disable=unused-argument
     with mock.patch(
         "noprint.sprint.PackageFinder.packages_iter", side_effect=_subpackages
     ):
-        prints = PackageFinder(1).run(
-            packages=["noprint"], first_only=first, verbose=True
-        )
-        expected = (mod[0], [mod[1]] if mod[1] else [])
-        assert prints == expected
+        result = PackageFinder().run()
+        packages = ("source", "test")
+        var = contextvars.ContextVar("packages")
+        var.set(packages)
+        noprint.sprint.packages = var
+        assert result == 0
