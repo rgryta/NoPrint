@@ -47,7 +47,7 @@ def _find_parent_dir(package: str, in_cwd: bool) -> str:
     module = PathFinder.find_spec(package, path=paths)
 
     if module is None:
-        raise ParentModuleNotFoundException("Parent module not found")
+        raise ParentModuleNotFoundException(f"Parent module not found for package {package}, [in_cwd: {in_cwd}]")
     path = _get_module_location(module)
 
     return path
